@@ -6,14 +6,16 @@ type idx = Idx of int
 type term =
   | Var of idx
   | Pi of name * term * term binder
-  | Sig of name * term * term binder
   | Lam of name * term * term binder
-  | Pair of term * term
+  | Rcd of (name * term) list
+  | Dict of (name * term) list
+  | Prod of term list
+  | Tup of term list
   | App of term * term
-  | Fst of term
-  | Snd of term
-  | Let of name * term * term * term binder
-  | Def of name * term * term * term binder
+  | Proj of term * name
+  | ProjAt of term * int
+  | Let of scope * name * term * term * term binder
+  (*| Def of name * term * term * term binder*)
       (** We ditinguish local definitions [Let] from top level ones [Def].
           Only top level ones will be glued-evaluated. *)
   | Uni

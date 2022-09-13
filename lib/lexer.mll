@@ -1,6 +1,6 @@
 {
 open Lexing
-open Parser_simple
+open Parser
 
 exception SyntaxError of string
 
@@ -19,12 +19,15 @@ let print_err_pos lexbuf =
 let alpha = ['a'-'z' 'A'-'Z']
 let digit = ['0'-'9']
 let ident = (alpha) (alpha|'-'|digit)*
+let unum = digit+
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 
 rule read = parse
   | whitespace  { read lexbuf }
   | newline     { next_line lexbuf; read lexbuf }
+  | "----"      { HLINE }
+  | "(*"        { read_comment lexbuf }
   | "Type"      { TYPE }
   | "Bool"      { BOOL }
   | "True"      { TRUE }
@@ -36,24 +39,29 @@ rule read = parse
   | "def"       { DEF }
   | '='         { EQ }
   | "in"        { IN }
-  | ".1"        { FST }
-  | ".2"        { SND }
   | "->"        { ARROW }
   | "→"         { ARROW }
-  | '*'         { TIMES }
-  | "×"         { TIMES }
   | '('         { LPAREN }
   | ')'         { RPAREN }
   | ':'         { COLON }
+  | ';'         { SEP }
   | ','         { COMMA }
   | ident       { IDENT (Lexing.lexeme lexbuf) }
+  | unum        { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | _           { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof         { EOF }
+
+
+and read_comment = parse
+  | "*)"        { read lexbuf }
+  | newline     { next_line lexbuf; read_comment lexbuf }
+  | eof         { raise (SyntaxError "file ends before comment") }
+  | _           { read_comment lexbuf }
 
 {
 
 let parse_buf lexbuf =
-  try Ok (Parser_simple.program read lexbuf) with
+  try Ok (program read lexbuf) with
     | SyntaxError reason ->
       let msg = print_err_pos lexbuf ^ ": " ^ reason in
       Error msg
@@ -72,13 +80,5 @@ let parse_file file =
   let res = parse_buf lexbuf in
   close_in handle;
   res
-  
-(*
-let parse_file name =
-  let handle = open_in name in
-  let s = really_input_string ch (in_channel_length ch) in
-  close_in ch;
-  parse_str s
-  *)
 
 }

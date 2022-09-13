@@ -12,7 +12,7 @@
 (package
   (name myowntt)
   (synopsis "A dependent type elaborator w/ NbE and glued evaluation.")
-  (depends ocaml dune menhir angstrom)
+  (depends ocaml dune menhir)
   (tags
     (topics "to describe" your project)))
 

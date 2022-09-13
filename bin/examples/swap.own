@@ -1,0 +1,44 @@
+let swap
+    : (A B : Type) → (A ; B) → (B ; A)
+    = λ A B p . (p.1 , p.0)
+in swap Bool Type (True, Bool)
+
+----
+
+let swap
+    : (A B : Type) → (x : A ; y : B) → (y : B ; x : A)
+    = λ A B p . (y = p.y, x = p.x)
+in swap Bool Type (x = False, y = Type)
+
+----
+
+let rotate
+    : (A B C D : Type) → (A; B; C; D) → (D; A; B; C)
+    = λ A B C D e . (e.3, e.0, e.1, e.2)
+in
+let onlyFalse
+    : Bool → Bool
+    = λ a . False
+in
+rotate Bool (Bool → Bool) (Type; Type) Type
+    (True, onlyFalse, (Type, Type), Bool)
+
+----
+
+let named
+    : (fst : Bool; snd : Type; thd : Type)
+    = (fst = True, snd = Bool, thd = Type)
+in
+let unnamed
+    : (fst : Bool; snd : Type; thd : Type)
+    = (True, Bool, Type)
+in
+let projecting
+    : (Bool; Type; Type)
+    = (named.fst, named.snd, named.thd)
+in
+let indexing
+    : (Bool; Type; Type)
+    = (named.0, named.1, named.2)
+in
+    (unnamed.0, unnamed.snd, unnamed.2)

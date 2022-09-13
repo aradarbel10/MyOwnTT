@@ -2,22 +2,15 @@
 (** the [Surface] module contains our AST. *)
 open Surface
 
-(** abstract over type formers *)
-type former = | FPi | FSig
-let formerOf (f : former) (x, a, b) =
-  match f with
-  | FPi  -> Pi (x, a, b)
-  | FSig -> Sig (x, a, b)
-
 (** exception raised when a [nonempty_list] returns an empty list. *)
 exception EmptyUnfolding
 
 (** desugars `(x y z : a) → b` into `(x : a) → (y : a) → (z : a) → b`. *)
-let rec unfoldFormer (f : former) (xs : string list) (dom : expr) (cod : expr) : expr =
+let rec unfoldPi (xs : string list) (dom : expr) (cod : expr) : expr =
   match xs with
   | [] -> raise EmptyUnfolding
-  | [x] -> formerOf f (x, dom, cod)
-  | x :: rest -> formerOf f (x, dom, unfoldFormer f rest dom cod)
+  | [x] -> Pi (x, dom, cod)
+  | x :: rest -> Pi (x, dom, unfoldPi rest dom cod)
 
 (** unfolds a nonempty list of expressions to their correctly-associated application. *)
 let rec unfoldApp (es : expr list) : expr =
@@ -47,23 +40,38 @@ let rec appToVars (es : expr) : (string list) option =
 
 (** if the LHS of an arrow is an application of variables with an annotation,
     desugar it using [unfoldPi]. in any other case treat it as a non-dependent arrow. *)
-let postprocessFormer (a : expr) (f : former) (b : expr) : expr =
+let postprocessPi (a : expr) (b : expr) : expr =
   match a with
   | Ann (es, t) ->
     begin match appToVars es with
-    | Some xs -> unfoldFormer f xs t b
-    | None -> formerOf f ("", a, b)
+    | Some xs -> unfoldPi xs t b
+    | None -> Pi ("", a, b)
     end
-  | _ -> formerOf f ("", a, b)
+  | _ -> Pi ("", a, b)
+
+let postprocessProd (es : expr list) : expr =
+  let rec aux (es : expr list) : (string * expr) list option =
+    match es with
+    | [] -> Some []
+    | Ann (Var l, t) :: rest ->
+      begin match aux rest with
+      | None -> None
+      | Some fs -> Some ((l, t)::fs)
+      end
+    | _ -> None
+  in match aux es with
+  | Some fs -> Rcd fs
+  | None -> Prod es
 
 %}
 
-%token EOF
+%token HLINE EOF
 
 %token <string> IDENT
+%token <int> NUM
 %token LPAREN RPAREN COLON
 %token LAMBDA DOT ARROW
-%token COMMA TIMES FST SND
+%token COMMA SEP
 %token TYPE BOOL TRUE FALSE
 %token LET DEF EQ IN
 
@@ -74,26 +82,25 @@ let postprocessFormer (a : expr) (f : former) (b : expr) : expr =
 (** subtlety: [COLON] must be higher than [ARROW], so that
     `x : a -> b` == `x : (a -> b)`
                  /= `(x : a) -> b` *)
-%right TIMES
 
 
 %start program
 
-%type <expr> program
+%type <expr list> program
 %type <expr> expr
 %type <expr> atom
 
 %type <Common.scope> scope
-%type <former> former
+%type <string * expr> lblval
 
 %%
 program:
-  | e=expr; EOF { e }
+  | es=separated_nonempty_list(HLINE, expr); EOF { es }
 
 expr:
   | es=nonempty_list(atom) { unfoldApp es }
   | e=expr; COLON; t=expr { Ann (e, t) }
-  | a=expr; f=former; b=expr { postprocessFormer a f b }
+  | a=expr; ARROW; b=expr { postprocessPi a b }
 
   | LAMBDA; xs=nonempty_list(IDENT); DOT; e=expr
   (** [LAMBDA] needs weak precedence to ensure `λx . e : t` == `λx . (e : t)` *)
@@ -105,17 +112,21 @@ scope:
   | LET { Common.Loc }
   | DEF { Common.Top }
 
-%inline former:
-  | ARROW { FPi }
-  | TIMES { FSig }
-
 atom:
   | x=IDENT { Var x }
   | LPAREN; e=expr; RPAREN { e }
-  | LPAREN; l=expr; COMMA; r=expr; RPAREN { Pair (l, r) }
-  | e=atom; FST { Fst e }
-  | e=atom; SND { Snd e }
+  | LPAREN; t=expr; SEP; ts=separated_list(SEP, expr); RPAREN
+    { postprocessProd (t::ts) }
+  | LPAREN; e=expr; COMMA; es=separated_list(COMMA, expr); RPAREN
+    { Tup (e::es) }
+  | LPAREN; t=lblval; COMMA; ts=separated_list(COMMA, lblval); RPAREN
+    { Dict (t::ts) }
+  | e=atom; DOT; i=NUM { ProjAt (e, i) }
+  | e=atom; DOT; i=IDENT { Proj (e, i) }
   | TYPE  { Uni }
   | BOOL  { Bool }
   | TRUE  { True }
   | FALSE { False }
+
+lblval:
+  | l=IDENT; EQ; e=expr { (l, e) }

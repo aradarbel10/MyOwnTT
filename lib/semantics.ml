@@ -10,13 +10,15 @@ type lvl = Lvl of int
     terms. Non-neutral values are already fully β-reduced. *)
 type value =
   | Pi of name * value * closure
-  | Sig of name * value * closure
   | Lam of name * value * closure
+  | Rcd of tele
+  | Dict of (name * value) list
+  | Prod of value list
+  | Tup of value list
   | Uni
   | Bool
   | True
   | False
-  | Pair of value * value
   | Neut of head * spine * value
 
 and head =
@@ -26,8 +28,8 @@ and head =
       [Glue] stores along with the [neut] itself another lazy version of the same
       value in which all top level definitions are unfolded. *)
 and elim =
-  | Fst
-  | Snd
+  | Proj of name
+  | ProjAt of int
   | App of {arg : value; base : value}
     (** [base] is the type of [arg] (base of the pi's type-family),
         used later in the type-directed conversion. *)
@@ -40,15 +42,17 @@ and spine = elim list
 
 and closure =
   | C of {bdr : Syn.term binder; env : env}
+and tele =
+  | T of {bdrs : (name * Syn.term) list; env : env}
 and env =
   | Emp
   | Local of env * name * value
   | Toplevel of env * name * value (*TODO need Lazy.t here?*)
 
-exception OutOfBounds
+exception OutOfBounds of string
 let rec atIdx (env : env) (Idx i : Syn.idx) : value =
   match env with
-  | Emp -> raise OutOfBounds
+  | Emp -> raise (OutOfBounds ("idx" ^ string_of_int i))
   | Local (env', _, v) | Toplevel (env', _, v) ->
     if i == 0
       then v
@@ -59,6 +63,11 @@ let height (env : env) : lvl =
     | Emp -> 0
     | Local (env', _, _) | Toplevel (env', _, _) -> 1 + aux env'
   in Lvl (aux env)
+let rec names (env : env) : name list =
+  match env with
+  | Emp -> []
+  | Local (env', x, _)
+  | Toplevel (env', x, _) -> x :: names env'
 
 (** We use this helper function to propagate projections (lazily!) through
     [Glue] into the unfolded version of the value. *)

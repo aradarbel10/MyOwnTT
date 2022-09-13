@@ -8,7 +8,6 @@ depends: [
   "ocaml"
   "dune" {>= "3.4"}
   "menhir"
-  "angstrom"
   "odoc" {with-doc}
 ]
 build: [

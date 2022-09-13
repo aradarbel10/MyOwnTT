@@ -8,13 +8,43 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 (x) Full spectrum dependent type theory featuring Π and Σ type formers
 (x) Normalization by Evaluation w/ DeBruijn levels & indices
 (x) Type directed conversion checking
-(?) Glued evaluation
+(?) Glued evaluation [2.5hr]
+    - test if actually works
+        - in quoting
+        - in conversion
+    - lazy environment
+    - conversion of glued and non-glued
+    - where do glued vals come from (toplevel defs!)
 (x) Bidirectional type checking
-(⅔) Parsing and pretty printing
+(x) Parsing and pretty printing
+( ) QoL [3hr]
+    - wildcards
+    - lambda annotations
+    - inferring lets
+    - error reporting [2hr]
+        - parser errors
+        - type checking (trace?)
 (¾) Boolean literals
-( ) Integer literals
-( ) Named tuples
-( ) REPL
+    - finish conversion checking
+    - if-then-else sugar
+( ) Integer literals [1hr]
+    - parse
+    - induction
+    - recursion sugar
+(⅔) Named tuples [1hr]
+    - typed binders?
+    - type dependency
+(½) REPL & File input [2hr]
+    - toplevel defs
+    - #eval
+    - #req
+    - struct and sig sugars
+    - entire repl [1hr]
+        - parse
+        - typecheck
+        - normalize
+        - define vars in environment
+
 
 ## Surface
 Surface expressions are the direct output from the parser. These use user-friendly explicit naming and distinguish top-level definitions from local let bindings.

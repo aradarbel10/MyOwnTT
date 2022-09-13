@@ -1,0 +1,20 @@
+(* the church-100 test modified from AndrasKovacs's elaboration zoo (GluedEval example) *)
+
+def Nat : Type = (N : Type) → (N → N) → N → N in
+
+let zero : Nat = λN s z . z in
+Type
+(*
+let succ : Nat → Nat = λa N s z . s (a N s z) in
+
+let add : Nat → Nat → Nat =
+    λa b N s z . a N s (b N s z) in
+let mul : Nat → Nat → Nat =
+    λa b N s z . a N (b N s) z in
+
+let five : Nat = λN s z . s (s (s (s (s z)))) in
+let ten : Nat = add five five in
+let hundo : Nat = mul ten ten in
+
+hundo
+*)

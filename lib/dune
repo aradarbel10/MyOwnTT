@@ -1,8 +1,7 @@
 (library
-  (name myowntt)
-  (libraries angstrom))
+  (name myowntt))
 
-(ocamllex lexer_old)
+(ocamllex lexer)
 (menhir
-  (modules parser_simple)
+  (modules parser)
   (flags --explain))
