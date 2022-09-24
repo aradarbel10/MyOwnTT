@@ -1,0 +1,70 @@
+(*
+    We define the type of binary predicates as a named 3-tuple
+    which holds the parameter types and the return type (which may depend on the arguments).
+*)
+
+def bin-pred
+    : Type
+    = sig
+        arg1 : Type;
+        arg2 : Type;
+        func : arg1 → arg2 → Bool;
+    end;
+
+def app-bin-pred
+    : (pred : bin-pred) → (params : (fst : pred.arg1; snd : pred.arg2)) → Bool
+    = λ pred params .
+        pred.func params.fst params.snd
+    ;
+
+(* some example boolean operators *)
+def bool-and
+    : bin-pred
+    = {
+        arg1 = Bool;
+        arg2 = Bool;
+        func = λ b1 b2 .
+            if b1 then b2 else False;
+    };
+
+def bool-or
+    : bin-pred
+    = record
+        arg1 = Bool;
+        arg2 = Bool;
+        func = λ b1 b2 .
+            if b1 then True else b2;
+    end;
+
+def bool-xor
+    : bin-pred
+    = record
+        arg1 = Bool;
+        arg2 = Bool;
+        func = λ b1 b2 .
+            if b1 then
+                if b2 then False else True
+            else
+                if b2 then True else False;
+    end;
+
+#eval app-bin-pred bool-xor (False, False);
+#eval app-bin-pred bool-xor (True, False);
+#eval app-bin-pred bool-xor (False, True);
+#eval app-bin-pred bool-xor (True, True);
+
+(* we can combine two binary predicates using a boolean operation *)
+
+def combine-preds
+    : ((Bool ; Bool) → Bool) → (pred1 pred2 : bin-pred) → bin-pred
+    = λ bool-op pred1 pred2 .
+        record
+            arg1 = (pred1.arg1 ; pred2.arg1);
+            arg2 = (pred1.arg2 ; pred2.arg2);
+            func = λ x y .
+                let res1 = app-bin-pred pred1 (x.0, y.0) in
+                let res2 = app-bin-pred pred2 (x.1, y.1) in
+                bool-op (res1, res2);
+        end
+    ;
+#exec combine-preds;

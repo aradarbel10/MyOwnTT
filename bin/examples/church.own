@@ -1,18 +1,19 @@
 (* the church-1000 test stolen from AndrasKovacs's elaboration zoo *)
 
-let Nat : Type = (N : Type) → (N → N) → N → N in
-let five : Nat = λN s z . s (s (s (s (s z)))) in
+def Nat : Type = (N : Type) → (N → N) → N → N;
+def five : Nat = λN s z . s (s (s (s (s z))));
 
-let add : Nat → Nat → Nat =
-    λa b N s z . a N s (b N s z) in
-let mul : Nat → Nat → Nat =
-    λa b N s z . a N (b N s) z in
+def add : Nat → Nat → Nat =
+    λa b N s z . a N s (b N s z);
+def mul : Nat → Nat → Nat =
+    λa b N s z . a N (b N s) z;
 
-let ten : Nat = add five five in
-let hundo : Nat = mul ten ten in
-let thous : Nat = mul ten hundo in
+def ten : Nat = add five five;
+def thous : Nat = mul ten hundo;
 
-thous
+#exec thous;
+#exec mul ten;
+#exec mul ten five;
 
 (*
 OUTPUT

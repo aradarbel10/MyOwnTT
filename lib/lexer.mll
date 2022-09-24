@@ -26,12 +26,21 @@ let newline = '\r' | '\n' | "\r\n"
 rule read = parse
   | whitespace  { read lexbuf }
   | newline     { next_line lexbuf; read lexbuf }
-  | "----"      { HLINE }
   | "(*"        { read_comment lexbuf }
+  | "#infer"    { INF }
+  | "#eval"     { EVAL }
+  | "#exec"     { EXEC }
   | "Type"      { TYPE }
   | "Bool"      { BOOL }
   | "True"      { TRUE }
   | "False"     { FALSE }
+  | "towards"   { TOWARDS }
+  | "if"        { IF }
+  | "then"      { THEN }
+  | "else"      { ELSE }
+  | "record"    { RECORD }
+  | "sig"       { SIG }
+  | "end"       { END }
   | "lam"       { LAMBDA }
   | "λ"         { LAMBDA }
   | '.'         { DOT }
@@ -43,15 +52,18 @@ rule read = parse
   | "→"         { ARROW }
   | '('         { LPAREN }
   | ')'         { RPAREN }
+  | '{'         { LCURLY }
+  | '}'         { RCURLY }
   | ':'         { COLON }
   | ';'         { SEP }
   | ','         { COMMA }
+  | '_'         { IDENT "" }
   | ident       { IDENT (Lexing.lexeme lexbuf) }
   | unum        { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | _           { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof         { EOF }
 
-
+(* TODO nested comments *)
 and read_comment = parse
   | "*)"        { read lexbuf }
   | newline     { next_line lexbuf; read_comment lexbuf }

@@ -36,11 +36,12 @@ let define (scp : scope) (x : name) (typ : Sem.value) (vl : Sem.value) (scn : sc
     let neut = Sem.Neut (Glue (scn.hi, unfd), [], typ) in
     Sem.Toplevel (scn.env, x, neut)
   in { ctx = (x, typ) :: scn.ctx; env = extend; hi = Sem.inc scn.hi }
-    
+
 exception UnInferrable
 exception TypeError of string
     
 let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
+  let names = List.map fst scn.ctx in
   match expr with
   | Ann (e, typ) ->
     let typ = check scn typ Sem.Uni in
@@ -72,7 +73,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
         let (e, vt) = infer scn e in
         let t = quote scn.hi vt in
         let ve = eval scn.env e in
-        let scn' = define Top x vt ve scn in
+        let scn' = define Loc x vt ve scn in
         let (rest, resttyp) = infer_entries scn' rest in
         ((x, e) :: rest, (x, t) :: resttyp)
     in let (fs, ts) = infer_entries scn fs in
@@ -85,17 +86,17 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     (Tup es, Prod ts)
   | App (e1, e2) ->
     let (e1, t1) = infer scn e1 in begin
-    match t1 with
+    match Sem.force_head t1 with
     | Pi (_, a, b) ->
       let e2 = check scn e2 a in
       let ve2 = eval scn.env e2 in
       let fam = inst b ve2 in
       (App (e1, e2), fam)
-    | _ -> raise (TypeError ("can't apply on a non-function type " ^ pretty_term e1))
+    | _ -> raise (TypeError ("can't apply on a non-function type " ^ pretty_term_under names e1))
     end
   | Proj (e, x) ->
     let (e, t) = infer scn e in
-    begin match t with
+    begin match Sem.force_head t with
     | Rcd fs ->
       let ve = eval scn.env e in
       let xt = field_type ve x fs in
@@ -104,36 +105,48 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     end
   | ProjAt (e, i) ->
     let (e', t) = infer scn e in
-    begin match t with
-    | Rcd (T {bdrs; _}) ->
-      let x = List.nth (List.map fst bdrs) i in
-      infer scn (Proj (e, x))
-    | Prod ts ->
-      (ProjAt (e', i), List.nth ts i)
-    | _ -> raise (TypeError "can't project index out of non-product type")
+    begin try
+      begin match Sem.force_head t with
+      | Rcd (T {bdrs; _}) ->
+        let x = List.nth (List.map fst bdrs) i in
+        infer scn (Proj (e, x))
+      | Prod ts ->
+        (ProjAt (e', i), List.nth ts i)
+      | _ -> raise (TypeError "can't project index out of non-product type")
+      end
+    with
+    | Failure _ -> raise (TypeError ("can't project index " ^ string_of_int i ^ " out of smaller product"))
     end
-  | Let (scp, x, typ, e, rest) ->
-    let (bdr, scn) = checkLet scn scp x typ e in
+  | Let (x, typ, e, rest) ->
+    let (bdr, scn) = checkLet scn Loc x typ e in
     let (rest, resttyp) = infer scn rest in
     (bdr rest, resttyp)
   | Uni -> (Uni, Uni)
   | Bool -> (Bool, Uni)
   | True -> (True, Bool)
   | False -> (False, Bool)
-  | BoolInd (mtv, scrut, tc, fc) ->
+  | BoolInd (Some mtv, scrut, tc, fc) ->
     let scrut = check scn scrut Bool in
     let vscrut = eval scn.env scrut in
-    let mtv = check scn mtv (Sem.Pi ("dum", Bool, C {bdr = B Uni; env = Emp})) in
+    let mtv = check scn mtv (Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp})) in
     let vmtv = eval scn.env mtv in
     let typ = vApp vmtv vscrut in
-    let tc = check scn tc typ in
+    let tc = check scn tc (vApp vmtv True) in
+    let fc = check scn fc (vApp vmtv False) in
+    let ind = Syn.BoolInd {motive = mtv; tcase = tc; fcase = fc; scrut = scrut} in
+    (ind, typ)
+  | BoolInd (None, scrut, tc, fc) ->
+    let scrut = check scn scrut Bool in
+    let (tc, typ) = infer scn tc in
     let fc = check scn fc typ in
+    let mtv = Syn.Lam ("_mtv", Bool, B (quote (Sem.inc scn.hi) typ)) in
     let ind = Syn.BoolInd {motive = mtv; tcase = tc; fcase = fc; scrut = scrut} in
     (ind, typ)
   | _ -> print_endline ("\n\n" ^ pretty_expr expr); raise UnInferrable
 
 and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
-  match expr, typ with
+  let names = List.map fst scn.ctx in
+  match expr, Sem.force_head typ with
   | Lam (x, e), Pi (_, a, C {bdr = B bdr; env}) ->
     let fam = eval (Local (env, x, Sem.var scn.hi a)) bdr in
     let e = check (assume x a scn) e fam in
@@ -151,44 +164,62 @@ and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
           let vt = eval env t in  
           let e = check scn e vt in
           let ve = eval scn.env e in
-          let env' = Sem.Toplevel (env, x, ve) in
-          let scn' = define Top x vt ve scn in
+          let env' = Sem.Local (env, x, ve) in
+          let scn' = define Loc x vt ve scn in
           check_entries scn' es (Sem.T {bdrs = es'; env = env'}) ((x, e) :: acc)
       end
     in Dict (check_entries scn es fs [])
   | Tup es, Rcd fs ->
-    let rec check_entries (es : Sur.expr list) (T {bdrs; env} : Sem.tele) (acc : (name * Syn.term) list) =
-      begin match es, bdrs with
-      | [], [] -> List.rev acc
-      | [], _ | _, [] -> raise (TypeError "dictionary has less entries than its record type")
-      | e :: es, (x, t) :: es' ->
-        let vt = eval env t in
-        let e = check scn e vt in
+    let lbls = tele_names fs in
+    let es' = List.map2 (fun lbl e -> (lbl, e)) lbls es in
+    check scn (Dict es') (Rcd fs)
+    (*
+  let rec check_entries (es : Sur.expr list) (T {bdrs; _} as fs : Sem.tele) (acc : (name * Syn.term) list) =
+    begin match es, bdrs with
+    | [], [] -> List.rev acc
+    | [], _ | _, [] -> raise (TypeError "dictionary has less entries than its record type")
+    | e :: es, _ :: _ ->
+      match inst_tele_at e fs with
+      | None -> failwith "unreachable"
+      | Some (x, t, fs') ->
+        print_endline ("donig the thing: " ^ pretty_expr e ^ " at " ^ x ^ " against " ^ pretty_term_under names t);
+        let e = check scn e t in
         let ve = eval scn.env e in
-        let env' = Sem.Toplevel (env, x, ve) in
-        check_entries es (Sem.T {bdrs = es'; env = env'}) ((x, e) :: acc)
+        check_entries es fs' ((x, e) :: acc)
       end
     in Dict (check_entries es fs [])
-  | Let (scp, x, typ, e, rest), resttyp ->
-    let (bdr, scn) = checkLet scn scp x typ e in
+    *)
+  | Let (x, typ, e, rest), resttyp ->
+    let (bdr, scn) = checkLet scn Loc x typ e in
     let rest = check scn rest resttyp in
     bdr rest
   | expr, expected ->
-    let (expr, actual) = infer scn expr in
+    let (texpr, actual) = infer scn expr in
     try
       conv scn.hi actual expected Uni;
-      expr
+      texpr
     with
       | UnEq s ->
-        let names = List.map fst scn.ctx in
         raise (TypeError (
         "inferred type " ^ pretty_term_under names (quote scn.hi actual)
         ^ " doesn't match expected type " ^ pretty_term_under names (quote scn.hi expected)
         ^ ", because: " ^ s))
+      | IllTyped err -> raise (IllTyped (
+        "while inferring " ^ pretty_expr expr ^ " inferred type " ^ pretty_term_under names (quote scn.hi actual)
+      ^ " doesn't match expected type " ^ pretty_term_under names (quote scn.hi expected)
+      ^ ", because: " ^ err))
 
-and checkLet (scn : scene) (scp : scope) (x : name) (typ : Sur.expr) (e : Sur.expr) : (Syn.term -> Syn.term) * scene =
-  let typ = check scn typ Uni in
-  let vtyp = eval scn.env typ in
-  let e = check scn e vtyp in
+and checkLet (scn : scene) (scp : scope) (x : name) (typ : Sur.expr option) (e : Sur.expr) : (Syn.term -> Syn.term) * scene =
+  let (e, vtyp) = begin match typ with
+  | Some typ ->
+    let typ = check scn typ Uni in
+    let vtyp = eval scn.env typ in
+    let e = check scn e vtyp in
+    (e, vtyp)
+  | None ->
+    try infer scn e
+    with
+    | UnInferrable -> raise (TypeError "uninferrable let-binding must be annotated")
+  end in
   let ve = eval scn.env e in
   ((fun rest -> Let (scp, x, quote scn.hi vtyp, e, B rest)), define scp x vtyp ve scn)

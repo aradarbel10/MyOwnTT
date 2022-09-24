@@ -6,7 +6,12 @@ open Pretty
     This function takes two values of the same type and tells us
     whether they're indeed equal up to β and η conversions. *)
 exception UnEq of string
+exception FormerMismatch of Sem.value * Sem.value * Sem.value
+
 let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value) : unit =
+  let e1 = Sem.force_head e1 in
+  let e2 = Sem.force_head e2 in
+  let typ = Sem.force_head typ in
   match e1, e2, typ with
   | Pi (_, base1, fam1), Pi (_, base2, fam2), Uni ->
     conv siz base1 base2 Uni;
@@ -14,16 +19,22 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
     let body1 = inst fam1 var in
     let body2 = inst fam2 var in
     conv (Sem.inc siz) body1 body2 Uni
-  (*| Sig (_, base1, fam1), Sig (_, base2, fam2), Uni -> _*)
-  (*| Sig _, Sig _, _*) 
   | Pi  _, Pi  _, _ -> raise (IllTyped "can't convert pi's under wrong type")
   | Pi  _, _    , _
-  (*| Sig _, _    , _*)
-  | _    , Pi  _, _
-  (*| _    , Sig _, _*) -> raise (UnEq "type former mismtach")
+  | _    , Pi  _, _ -> raise (UnEq "type former mismatch")
 
-  | Prod _, Rcd _, Uni
-  | Rcd _, Prod _, Uni -> failwith "TODO18"
+  | Prod ts, Rcd fs, Uni
+  | Rcd fs, Prod ts, Uni ->
+    let rec conv_fields (siz : Sem.lvl) (fs : Sem.tele) (ts : Sem.value list) =
+      begin match Eval.inst_tele siz fs, ts with
+      | Some (_, typ, tel), t :: rest ->
+        conv siz typ t Uni;
+        conv_fields (Sem.inc siz) tel rest
+      | None, [] -> ()
+      | _ -> raise (UnEq "can't convert record and product of different lengths")
+      end
+    in conv_fields siz fs ts
+  (* failwith "TODO: should this be convertible?" *)
   | Prod _, Rcd _, _
   | Rcd _, Prod _, _ -> raise (UnEq "can't convert record and product under wrong type")
 
@@ -65,26 +76,23 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
     let body = inst fam var in
     conv (Sem.inc siz) res1 res2 body
   | Lam _, _, _
-  | _, Lam _, _ -> raise (UnEq "doesn't match lambda")
-  
-  (*
-  | e1, e2, Sig (_, base, fam) ->
-    let fst1 = vFst e1 in
-    let fst2 = vFst e2 in
-    conv siz fst1 fst2 base;
-    let typ = inst fam fst1 in
-    conv siz (vSnd e1) (vSnd e2) typ
-  | Pair _, _, _
-  | _, Pair _, _ -> raise (UnEq "doesn't match pair")
-  *)
+  | _, Lam _, _ -> raise (IllTyped "converting lambda under wrong type")
 
-  | _e1, _e2, Rcd _fs -> failwith "TODO7"
+  | e1, e2, Rcd fs ->
+    let rec conv_fields (siz : Sem.lvl) (fs : Sem.tele) : unit =
+      match inst_tele siz fs with
+      | None -> ()
+      | Some (lbl, typ, rest) ->
+        conv siz (vProj lbl e1) (vProj lbl e2) typ;
+        conv_fields (Sem.inc siz) rest
+    in conv_fields siz fs
   | Dict _, _, _
-  | _, Dict _, _ -> failwith "TODO8"
+  | _, Dict _, _ -> raise (IllTyped "converting dictionary under wrong type")
 
-  | _e1, _e2, Prod _fs -> failwith "TODO9"
+  | e1, e2, Prod ts ->
+    List.iteri (fun i t -> conv siz (vProjAt i e1) (vProjAt i e2) t) ts;
   | Tup _, _, _
-  | _, Tup _, _ -> failwith "TODO10"
+  | _, Tup _, _ -> raise (IllTyped "converting tuple under wrong type")
 
   | Neut (hd1, sp1, typ1), Neut (hd2, sp2, typ2), _ ->
     conv     siz typ1 typ2 Uni;
@@ -110,23 +118,22 @@ and spineconv (siz : Sem.lvl) (sp1 : Sem.spine) (sp2 : Sem.spine) : unit =
   match sp1, sp2 with
   | [], [] -> ()
   | em1 :: rest1, em2 :: rest2 ->
-    elimconv siz em1 em2;
     spineconv siz rest1 rest2;
+    elimconv siz em1 em2;
   | _ -> raise (UnEq "spines have different lengths")
 and elimconv (siz : Sem.lvl) (em1 : Sem.elim) (em2 : Sem.elim) : unit =
   match em1, em2 with
-  (*| Fst, Fst | Snd, Snd -> ()*)
-  | Proj _x1, Proj _x2 -> failwith "TODO11"
-  | ProjAt _i1, ProjAt _i2 -> failwith "TODO12"
+  | Proj x1, Proj x2 -> if x1 = x2 then () else raise (UnEq "projecting different labels")
+  | ProjAt i1, ProjAt i2 -> if i1 = i2 then () else raise (UnEq "projecting different indices")
   | App {arg = arg1; base = base1}, App {arg = arg2; base = base2} ->
     conv siz base1 base2 Uni;
     conv siz arg1 arg2 base1
-  | BoolInd {motive = mtv1; tcase = _; fcase = _},
-    BoolInd {motive = mtv2; tcase = _; fcase = _} ->
-    let famtyp = Sem.Pi ("dum", Bool, C {bdr = B Uni; env = Emp}) (* Bool → Type *) in
+  | BoolInd {motive = mtv1; tcase = tc1; fcase = fc1},
+    BoolInd {motive = mtv2; tcase = tc2; fcase = fc2} ->
+    let famtyp = Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp}) (* Bool → Type *) in
     conv siz mtv1 mtv2 famtyp;
-    failwith "unfinished BoolInd conversion"
-    (*TODO finish this!!! check cases...!*)
+    conv siz tc1 tc2 (vApp mtv1 True);
+    conv siz fc1 fc2 (vApp mtv1 False)
   | _ -> raise (UnEq "eliminators don't match")
 
 and teleconv (siz : Sem.lvl) (tel1 : Sem.tele) (tel2 : Sem.tele) : unit =

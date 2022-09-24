@@ -57,13 +57,13 @@ let rec atIdx (env : env) (Idx i : Syn.idx) : value =
     if i == 0
       then v
       else atIdx env' (Idx (i - 1))
-let height (env : env) : lvl =
+let height (env : env) : lvl = (* TODO still need this? ideally just use scn.hi always *)
   let rec aux (env : env) : int =
     match env with
     | Emp -> 0
     | Local (env', _, _) | Toplevel (env', _, _) -> 1 + aux env'
   in Lvl (aux env)
-let rec names (env : env) : name list =
+let rec names (env : env) : name list = (* TODO still need this? ideally store names separately in scene *)
   match env with
   | Emp -> []
   | Local (env', x, _)
@@ -79,3 +79,8 @@ let head_map (f : value -> value) (hd : head) : head =
 let inc (Lvl l : lvl) : lvl = Lvl (l + 1)
 let nextvar (siz : lvl) (typ : value) : value = Neut (Var siz, [], typ)
 let var (i : lvl) (typ : value) : value = Neut (Var i, [], typ)
+
+let rec force_head (vl : value) : value =
+  match vl with
+  | Neut (Glue (_, unfd), _, _) -> force_head (Lazy.force unfd)
+  | _ -> vl

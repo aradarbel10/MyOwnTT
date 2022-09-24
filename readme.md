@@ -10,40 +10,57 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 (x) Type directed conversion checking
 (?) Glued evaluation [2.5hr]
     - test if actually works
-        - in quoting
         - in conversion
+            - conversion of two glues
+            - conversion of glued and non-glued
     - lazy environment
-    - conversion of glued and non-glued
-    - where do glued vals come from (toplevel defs!)
+        - reform environments in general bc they suck
 (x) Bidirectional type checking
-(x) Parsing and pretty printing
+(⅘) Parsing and pretty printing
+    - change records to `{}`
+    - context&precedence-aware pretty printing [2hr]
 ( ) QoL [3hr]
-    - wildcards
     - lambda annotations
     - inferring lets
+    - function definition sugar
     - error reporting [2hr]
+        - catch in `exec`
+        - error location
         - parser errors
         - type checking (trace?)
-(¾) Boolean literals
-    - finish conversion checking
-    - if-then-else sugar
-( ) Integer literals [1hr]
+        - conversion ("could not equate A ≡ B when checking X has type Y")
+        - internals
+    - nested & line comments
+(x) Boolean literals
+( ) Natural numbers [1hr]
     - parse
     - induction
     - recursion sugar
 (⅔) Named tuples [1hr]
     - typed binders?
     - type dependency
+    - dictionary annotations
 (½) REPL & File input [2hr]
-    - toplevel defs
-    - #eval
-    - #req
-    - struct and sig sugars
+    - #check
+    - #conv
+    - #unfold
+    - elaborate file
+    - nested comments
+    - indentation aware parsing
     - entire repl [1hr]
         - parse
         - typecheck
         - normalize
         - define vars in environment
+        - load defs from file
+( ) Refactoring
+    - separate module for scenes
+    - safe closures and multiclosures
+    - uniform typed binders & closures
+    - execution module
+    - does LET still need a scope?
+    - use scope specifier in enviornment (also turn environment to a normal list)
+    - rename Rcd, Dict to Sig, Rcd or Sig, Struct...
 
 
 ## Surface

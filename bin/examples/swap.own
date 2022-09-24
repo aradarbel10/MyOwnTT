@@ -1,44 +1,36 @@
-let swap
+def swap
     : (A B : Type) → (A ; B) → (B ; A)
-    = λ A B p . (p.1 , p.0)
-in swap Bool Type (True, Bool)
+    = λ A B p . (p.1 , p.0);
+#exec swap Bool Type (True, Bool);
 
-----
-
-let swap
+def swap
     : (A B : Type) → (x : A ; y : B) → (y : B ; x : A)
-    = λ A B p . (y = p.y, x = p.x)
-in swap Bool Type (x = False, y = Type)
+    = λ A B p . (y = p.y, x = p.x);
+#exec swap Bool Type (x = False, y = Type);
 
-----
-
-let rotate
+def rotate
     : (A B C D : Type) → (A; B; C; D) → (D; A; B; C)
-    = λ A B C D e . (e.3, e.0, e.1, e.2)
-in
-let onlyFalse
+    = λ A B C D e . (e.3, e.0, e.1, e.2);
+def onlyFalse
     : Bool → Bool
-    = λ a . False
-in
-rotate Bool (Bool → Bool) (Type; Type) Type
-    (True, onlyFalse, (Type, Type), Bool)
+    = λ a . False;
+#eval rotate Bool (Bool → Bool) (Type; Type) Type
+    (True, onlyFalse, (Type, Type), Bool);
 
-----
 
-let named
+def named
     : (fst : Bool; snd : Type; thd : Type)
-    = (fst = True, snd = Bool, thd = Type)
-in
-let unnamed
+    = (fst = True, snd = Bool, thd = Type);
+#infer named;
+def unnamed
     : (fst : Bool; snd : Type; thd : Type)
-    = (True, Bool, Type)
-in
-let projecting
+    = (True, Bool, Type);
+#infer unnamed;
+def projecting
     : (Bool; Type; Type)
-    = (named.fst, named.snd, named.thd)
-in
-let indexing
+    = (named.fst, named.snd, named.thd);
+#infer projecting;
+def indexing
     : (Bool; Type; Type)
-    = (named.0, named.1, named.2)
-in
-    (unnamed.0, unnamed.snd, unnamed.2)
+    = (named.0, named.1, named.2);
+#infer indexing;

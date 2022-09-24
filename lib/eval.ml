@@ -29,7 +29,7 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
       | [] -> []
       | (lbl, entry) :: rest ->
         let ventry = eval env entry in
-        let env' = Sem.Toplevel (env, lbl, ventry) in
+        let env' = Sem.Local (env, lbl, ventry) in
         (lbl, ventry) :: process_fields env' rest
     in Dict (process_fields env fs)
   | Prod ts -> Prod (List.map (eval env) ts)
@@ -37,8 +37,8 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
   | App (e1, e2) -> vApp (eval env e1) (eval env e2)
   | Proj (e, x) -> vProj x (eval env e)
   | ProjAt (e, i) -> vProjAt i (eval env e)
-  | Let (_, x, _, body, B rest) ->
-    (*begin match scp with
+  | Let (scp, x, typ, body, B rest) ->
+    begin match scp with
     | Top ->
       let typ' = eval env typ in
       let body' = lazy (eval env body) in
@@ -46,11 +46,10 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
       let env' = Sem.Toplevel (env, x, Neut (glue, [], typ')) in
       eval env' rest
     | Loc ->
-    end
-      *)
       let body' = eval env body in
       let env' = Sem.Local (env, x, body') in
       eval env' rest
+    end
   | Uni -> Uni
   | Bool -> Bool
   | True -> True
@@ -66,10 +65,9 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
     | True -> Lazy.force tc'
     | False -> Lazy.force fc'
     | Neut (hd, sp, Bool) ->
-      let fam = Sem.C {bdr = B mtv; env = env} in
       let mtv' = eval env mtv in
+      let typ = vApp mtv' scrut' in
       let elim = Sem.BoolInd {motive = mtv'; tcase = Lazy.force tc'; fcase = Lazy.force fc'} in
-      let typ = inst fam scrut' in
       Neut (hd, elim :: sp, typ)
     | _ -> raise (IllTyped "can't eliminate non-bool")
     
@@ -80,15 +78,19 @@ and inst (C {bdr = B body; env = env} : Sem.closure) (base : Sem.value) : Sem.va
     
 (** β-reduction helpers *)
 and vApp (fnc : Sem.value) (arg : Sem.value) : Sem.value =
-  match fnc with
+  match Sem.force_head fnc with
+  | Neut (hd, sp, typ) ->
+    begin match Sem.force_head typ with
+    | Pi (_, base, fam) ->
+      let hd' = Sem.head_map (fun vl -> vApp vl arg) hd in
+      let sp' = (Sem.App {arg = arg; base = base}) :: sp in
+      Neut (hd', sp', inst fam base)
+    | _ -> raise (IllTyped "can't apply on a non-pi neutral")
+    end
   | Lam (_, _, body) -> inst body arg
-  | Neut (hd, sp, Pi (_, base, fam)) ->
-    let hd' = Sem.head_map (fun vl -> vApp vl arg) hd in
-    let sp' = (Sem.App {arg = arg; base = base}) :: sp in
-    Neut (hd', sp', inst fam base)
   | _ -> raise (IllTyped "can't apply on non-lambda")
 and vProj (x : name) (vl : Sem.value) : Sem.value =
-  match vl with
+  match Sem.force_head vl with
   | Dict fs ->
     begin match List.assoc_opt x fs with
     | None ->
@@ -97,14 +99,18 @@ and vProj (x : name) (vl : Sem.value) : Sem.value =
       raise (IllTyped ("can't project out of dictionary " ^ set ^ " without given label " ^ x))
     | Some e -> e
     end
-  | Neut (hd, sp, Rcd fs) ->
-    let hd' = Sem.head_map (vProj x) hd in
-    let sp' = Sem.Proj x :: sp in
-    let typ = field_type vl x fs in
-    Neut (hd', sp', typ)
-  | _ -> raise (IllTyped "can't project field from non-record")
+  | Neut (hd, sp, typ) ->
+    begin match Sem.force_head typ with
+    | Rcd fs ->
+      let hd' = Sem.head_map (vProj x) hd in
+      let sp' = Sem.Proj x :: sp in
+      let typ = field_type vl x fs in
+      Neut (hd', sp', typ)
+    | _ -> raise (IllTyped "can't project field from a non-record neutral")
+    end
+  | _ -> raise (IllTyped "can't project field from non-dictionary")
 and vProjAt (i : int) (vl : Sem.value) : Sem.value =
-  match vl with
+  match Sem.force_head vl with
   | Tup es ->
     begin try List.nth es i with
     | Failure _ -> raise (IllTyped "index outside of tuple")
@@ -114,21 +120,26 @@ and vProjAt (i : int) (vl : Sem.value) : Sem.value =
     begin try List.nth entries i with
     | Failure _ -> raise (IllTyped "index outside of dictionary")
     end
-  | Neut (hd, sp, Prod ts) ->
-    let typ = begin try List.nth ts i with
-    | Failure _ -> raise (IllTyped "index outside of product")
-    end in
-    let hd' = Sem.head_map (vProjAt i) hd in
-    let sp' = Sem.ProjAt i :: sp in
-    Neut (hd', sp', typ)
-  | Neut (hd, sp, Rcd (T {bdrs; _} as fs)) ->
-    let typ = begin match List.nth_opt bdrs i with
-    | None -> raise (IllTyped "")
-    | Some (lbl, _) -> field_type vl lbl fs
-    end in
-    let hd' = Sem.head_map (vProjAt i) hd in
-    let sp' = Sem.ProjAt i :: sp in
-    Neut (hd', sp', typ)
+  | Neut (hd, sp, typ) ->
+    begin match Sem.force_head typ with
+    | Prod ts ->
+      let typ = begin try List.nth ts i with
+      | Failure _ -> raise (IllTyped "index outside of product")
+      end in
+      let hd' = Sem.head_map (vProjAt i) hd in
+      let sp' = Sem.ProjAt i :: sp in
+      Neut (hd', sp', typ)
+    | Rcd (T {bdrs; _} as fs) ->
+      let typ = begin match List.nth_opt bdrs i with
+      | None -> raise (IllTyped "")
+      | Some (lbl, _) -> field_type vl lbl fs
+      end in
+      let hd' = Sem.head_map (vProjAt i) hd in
+      let sp' = Sem.ProjAt i :: sp in
+      Neut (hd', sp', typ)
+    | Neut (Var (Lvl typlvl), _typsp, Uni) -> failwith ("oops " ^ string_of_int typlvl)
+    | _ -> raise (IllTyped "can't project index from non-product neutral")
+    end    
   | _ -> raise (IllTyped "can't project index from non-tuple")
 
 and field_type (vl : Sem.value) (x : name) (T {bdrs; env} : Sem.tele) : Sem.value =
@@ -140,28 +151,28 @@ and field_type (vl : Sem.value) (x : name) (T {bdrs; env} : Sem.tele) : Sem.valu
       then eval env t
       else
         let entry = vProj lbl vl in
-        let env' = Sem.Toplevel (env, x, entry) in
+        let env' = Sem.Local (env, x, entry) in
         field_type vl x (T {bdrs = rest; env = env'})
 
 let inst_tele_at (vl : Sem.value) (tel : Sem.tele) : (name * Sem.value * Sem.tele) option =
   let T {bdrs; env} = tel in
   match bdrs with
-  | [] -> None (*raise (Invalid_argument "can't step empty telescope")*)
+  | [] -> None
   | (x, t) :: rest ->
     let vt = eval env t in
-    (*let t' = quote siz vt in*)
-    let env' = Sem.Toplevel (env, x, vl) in
+    let env' = Sem.Local (env, x, vl) in
     Some (x, vt, T {bdrs = rest; env = env'})
 
 let inst_tele (siz : Sem.lvl) (tel : Sem.tele) : (name * Sem.value * Sem.tele) option =
   let T {bdrs; env} = tel in
   match bdrs with
-  | [] -> None (*raise (Invalid_argument "can't step empty telescope")*)
+  | [] -> None
   | (x, t) :: rest ->
     let vt = eval env t in
-    (*let t' = quote siz vt in*)
-    let env' = Sem.Toplevel (env, x, Sem.var siz vt) in
+    let env' = Sem.Local (env, x, Sem.var siz vt) in
     Some (x, vt, T {bdrs = rest; env = env'})
+
+let tele_names (T {bdrs; _} : Sem.tele) : name list = List.map fst bdrs
 
 let lvl2idx (Lvl siz : Sem.lvl) (Lvl i : Sem.lvl) = Syn.Idx (siz - i - 1)
 
@@ -210,4 +221,7 @@ and quote_elim (siz : Sem.lvl) (em : Sem.elim) (scrut : Syn.term) : Syn.term =
 
 and quote_head (siz : Sem.lvl) (hd : Sem.head) : Syn.term =
   match hd with
-  | Var i | Glue (i, _) -> Var (lvl2idx siz i)
+  | Var i | Glue (i, _) ->
+    let (Idx i) as idx = lvl2idx siz i in
+    if i < 0 then failwith "quoting negative index"
+    else Var idx

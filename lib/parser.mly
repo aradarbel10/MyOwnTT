@@ -65,17 +65,21 @@ let postprocessProd (es : expr list) : expr =
 
 %}
 
-%token HLINE EOF
+%token EOF
+%token INF EVAL EXEC
 
 %token <string> IDENT
 %token <int> NUM
-%token LPAREN RPAREN COLON
+%token LCURLY RCURLY LPAREN RPAREN COLON
+%token RECORD SIG END
 %token LAMBDA DOT ARROW
+%token TOWARDS IF THEN ELSE
 %token COMMA SEP
 %token TYPE BOOL TRUE FALSE
 %token LET DEF EQ IN
 
 %nonassoc WEAK
+
 (** [ARROW]s are right-associative, [COLON]s require disambiguation *)
 %nonassoc COLON
 %right ARROW
@@ -86,16 +90,27 @@ let postprocessProd (es : expr list) : expr =
 
 %start program
 
-%type <expr list> program
+%type <prog> program
+%type <stmt> statement
 %type <expr> expr
 %type <expr> atom
 
-%type <Common.scope> scope
+%type <expr> let_annot
 %type <string * expr> lblval
+%type <string * expr> lbltyp
+
+%type <unit> lrcd
+%type <unit> rrcd
 
 %%
 program:
-  | es=separated_nonempty_list(HLINE, expr); EOF { es }
+  | stmts=list(statement); EOF { stmts }
+
+statement:
+  | DEF; x=IDENT; t=option(let_annot); EQ; e=expr; SEP { Def (x, t, e) }
+  | INF; e=expr; SEP { Inf e }
+  | EVAL; e=expr; SEP { Eval e }
+  | EXEC; e=expr; SEP { Exec e }
 
 expr:
   | es=nonempty_list(atom) { unfoldApp es }
@@ -105,12 +120,27 @@ expr:
   | LAMBDA; xs=nonempty_list(IDENT); DOT; e=expr
   (** [LAMBDA] needs weak precedence to ensure `λx . e : t` == `λx . (e : t)` *)
     %prec WEAK { unfoldLam xs e }
-  | s=scope; x=IDENT; COLON; t=expr; EQ; e=expr; IN; r=expr
-    %prec WEAK { Let (s, x, t, e, r) }
+  | TOWARDS; mtv=expr; IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
+    %prec WEAK { BoolInd (Some mtv, cond, tc, fc) }
+  | IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
+    %prec WEAK { BoolInd (None, cond, tc, fc) }
+  | LET; x=IDENT; t=option(let_annot); EQ; e=expr; IN; r=expr
+    %prec WEAK { Let (x, t, e, r) }
 
-scope:
-  | LET { Common.Loc }
-  | DEF { Common.Top }
+%inline let_annot:
+  | COLON; t=expr { t }
+
+%inline ldict:
+  | LCURLY { () }
+  | RECORD { () }
+%inline rdict:
+  | rrcd { () }
+%inline lrcd:
+  | LCURLY { () }
+  | SIG { () }
+%inline rrcd:
+  | RCURLY { () }
+  | END { () }
 
 atom:
   | x=IDENT { Var x }
@@ -119,8 +149,10 @@ atom:
     { postprocessProd (t::ts) }
   | LPAREN; e=expr; COMMA; es=separated_list(COMMA, expr); RPAREN
     { Tup (e::es) }
-  | LPAREN; t=lblval; COMMA; ts=separated_list(COMMA, lblval); RPAREN
+  | ldict; t=lblval; ts=list(lblval); rdict
     { Dict (t::ts) }
+  | lrcd; t=lbltyp; ts=list(lbltyp); rrcd
+    { Rcd (t::ts) }
   | e=atom; DOT; i=NUM { ProjAt (e, i) }
   | e=atom; DOT; i=IDENT { Proj (e, i) }
   | TYPE  { Uni }
@@ -128,5 +160,7 @@ atom:
   | TRUE  { True }
   | FALSE { False }
 
-lblval:
-  | l=IDENT; EQ; e=expr { (l, e) }
+%inline lblval:
+  | l=IDENT; EQ; e=expr; SEP { (l, e) }
+%inline lbltyp:
+  | l=IDENT; COLON; e=expr; SEP { (l, e) }

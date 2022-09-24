@@ -1,4 +1,5 @@
 (executable
   (public_name myowntt)
   (name main)
-  (libraries myowntt))
+  (libraries myowntt)
+  (modes byte exe))

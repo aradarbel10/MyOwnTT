@@ -27,22 +27,28 @@ let rec pretty_expr (expr : Sur.expr) : string =
   | App (e1, e2) -> pretty_expr e1 ^ " " ^ pretty_expr e2
   | Proj (e, x) -> pretty_expr e ^ "." ^ x
   | ProjAt (e, i) -> pretty_expr e ^ "." ^ string_of_int i
-  | Let (scp, x, t, e, rest) ->
-    (match scp with | Loc -> "let " | Top -> "def ")
-    ^ x ^ " : " ^ pretty_expr t ^ " = " ^ pretty_expr e
+  | Let (x, t, e, rest) ->
+    "let " ^ x ^
+    (match t with | Some t -> " : " ^ pretty_expr t | None -> "")
+    ^ " = " ^ pretty_expr e
     ^ " in " ^ pretty_expr rest
   | Uni -> "Type"
   | Bool -> "Bool"
   | False -> "False"
   | True -> "True"
-  | BoolInd (fam, e, t, f) ->
-    "towards " ^ pretty_expr fam ^ " if " ^ pretty_expr e
+  | BoolInd (mtv, e, t, f) ->
+    (match mtv with
+    | Some mtv -> "towards " ^ pretty_expr mtv
+    | None -> "")
+    ^ " if " ^ pretty_expr e
     ^ " then " ^ pretty_expr t
     ^ " else " ^ pretty_expr f
   
 let rec pretty_term_under (ns : name list) (e : Syn.term) : string =
   match e with
-  | Var (Idx i) -> List.nth ns i
+  | Var (Idx i) -> begin try List.nth ns i with
+    | Failure _ -> "idx" ^ string_of_int i ^ "/" ^ string_of_int (List.length ns)
+  end
   (* TODO properly print parentheses around nested arrows (or other places where needed) *)
   | Pi ("", a, B b) -> "(" ^ pretty_term_under ns a ^ " → " ^ pretty_term_under (""::ns) b ^ ")"
   | Pi (x, a, B b) -> "((" ^ x ^ " : " ^ pretty_term_under ns a ^ ") → " ^ pretty_term_under (x::ns) b ^ ")"
@@ -68,9 +74,6 @@ let rec pretty_term_under (ns : name list) (e : Syn.term) : string =
     (match scp with | Loc -> "let " | Top -> "def ")
     ^ x ^ " : " ^ pretty_term_under ns t ^ " = " ^ pretty_term_under ns e
     ^ " in " ^ pretty_term_under (x::ns) rest
-  (*| Def (x, t, e, B rest) ->
-    "def " ^ x ^ " : " ^ pretty_term_under ns t ^ " = " ^ pretty_term_under ns e
-    ^ " in " ^ pretty_term_under (x::ns) rest*)
   | Uni -> "Type"
   | Bool -> "Bool"
   | False -> "False"

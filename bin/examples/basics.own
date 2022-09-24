@@ -1,38 +1,30 @@
-let id : (A : Type) → A → A
-       = λ A x . x
-in (id Type Bool, id Bool False)
+def id : (A : Type) → A → A
+       = λ A x . x;
 
-----
-
-False
-
-----
-
-let id
-    : (A : Type) → A → A
-    = λ A x . x
-in
-let typid
-    : Type → Type
-    = λ t . t
-in
-id (Type → Type) typid
-
-----
+#exec (id Type Bool, id Bool False);
+#exec False;
 
 def id
     : (A : Type) → A → A
-    = λ A x . x
-in
+    = λ A x . x;
+def typid
+    : Type → Type
+    = λ t . t;
+#exec id (Type → Type) typid;
+
+def id
+    : (A : Type) → A → A
+    = λ A x . x;
 def const
     : (A B : Type) → A → B → A
-    = λ A B x y . x
-in (* does this bother you?? *)
-(   idConst = id ((C D : Type) → C → D → C) const
-,   idTyp = (id Type Bool, id Type Type)
-,   pair = (True, False)
-,   idTrueFalse = id (Bool; Bool) (True, False)
-)
+    = λ A B x y . x;
+
+#exec
+    (   idConst = id ((C D : Type) → C → D → C) const
+    ,   idTyp = (id Type Bool, id Type Type)
+    ,   pair = (True, False)
+    ,   idTrueFalse = id (Bool; Bool) (True, False)
+    );
 
 (*
 infers to (

@@ -1,0 +1,30 @@
+(* this file demonstrates the equivalence
+  `A × B ≅ (b : Bool) → (towards Type if b then A else B)`.
+  A full proof will require identity types, which I don't have. *)
+
+(* helper *)
+def motive
+  : Type → Type → Bool → Type
+  = λ A B b . if b then A else B;
+
+(* goal types *)
+def pair
+  : Type → Type → Type
+  = λ A B . (A ; B)
+  ;
+
+def func
+  : Type → Type → Type
+  = λ A B . (b : Bool) → motive A B b
+  ;
+
+(* conversions *)
+def func-to-pair
+  : (A B : Type) → func A B → pair A B
+  = λ _ _ f . (f True , f False)
+  ;
+
+def pair-to-func
+  : (A B : Type) → pair A B → func A B
+  = λ A B p b . towards motive A B if b then p.0 else p.1
+  ;
