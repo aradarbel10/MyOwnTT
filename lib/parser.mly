@@ -66,10 +66,11 @@ let postprocessProd (es : expr list) : expr =
 %}
 
 %token EOF
-%token STMT_INF STMT_EVAL STMT_EXEC STMT_CHECK STMT_AGAINST STMT_CONV STMT_AND STMT_AT
+%token STMT_INF STMT_EVAL STMT_PARSE STMT_EXEC STMT_CHECK STMT_AGAINST STMT_CONV STMT_AND STMT_AT STMT_IMPORT
 
 %token <string> IDENT
 %token <int> NUM
+%token <string> STRING
 %token LCURLY RCURLY LPAREN RPAREN COLON
 %token RECORD SIG END
 %token LAMBDA DOT ARROW
@@ -113,9 +114,11 @@ statement:
   | DEF; x=IDENT; t=option(let_annot); EQ; e=expr; SEP { Def (x, t, e) }
   | STMT_INF; e=expr; SEP { Inf e }
   | STMT_EVAL; e=expr; SEP { Eval e }
+  | STMT_PARSE; e=expr; SEP { Parse e }
   | STMT_EXEC; e=expr; SEP { Exec e }
   | STMT_CHECK; e=expr; STMT_AGAINST; t=expr; SEP { Check (e, t) }
   | STMT_CONV; e1=expr; STMT_AND; e2=expr; STMT_AT; t=expr; SEP { Conv (e1, e2, t) }
+  | STMT_IMPORT; path=STRING; SEP { Import path }
 
 expr:
   | es=nonempty_list(atom) { unfoldApp es }

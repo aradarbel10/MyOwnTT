@@ -35,5 +35,7 @@ and stmt =
   | Exec of expr
   | Check of expr * expr
   | Conv of expr * expr * expr
+  | Parse of expr
+  | Import of string
 
 type prog = stmt list

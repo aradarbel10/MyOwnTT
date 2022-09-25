@@ -28,20 +28,9 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 (x) Boolean literals
 ( ) Natural numbers [1hr]
     - recursion sugar
+        - `shared_type : scene -> term -> term -> type option -> type`
 (x) Named tuples [1hr]
-(½) REPL & File input [2hr]
-    - entire repl [1hr]
-        - parse
-        - typecheck
-        - normalize
-        - define vars in environment
-        - load defs from file
-( ) Refactoring (MAYBE!)
-    - separate module for scenes
-    - `names` entry in scene
-    - safe closures and multiclosures
-    - uniform typed binders & closures
-    - use scope specifier in enviornment (also turn environment to a normal list)
+(x) REPL & File input
 
 ## Surface
 Surface expressions are the direct output from the parser. These use user-friendly explicit naming and distinguish top-level definitions from local let bindings.

@@ -5,7 +5,7 @@ open Eval
 open Lexer
 open Conversion
 
-let exec_stmt (scn : scene) (stmt : Sur.stmt) : scene =
+let rec exec_stmt (scn : scene) (stmt : Sur.stmt) : scene =
   match stmt with
   | Def (x, t, e) ->
     snd (checkLet scn Top x t e)
@@ -21,6 +21,9 @@ let exec_stmt (scn : scene) (stmt : Sur.stmt) : scene =
     let names = List.map fst scn.ctx in
     print_endline ("the normal form of " ^ pretty_expr e
       ^ " is " ^ pretty_term_under names (quote (scn.hi) vl) ^ "\n");
+    scn
+  | Parse e ->
+    print_endline ("successfully parsed " ^ pretty_expr e);
     scn
   | Exec e ->
     let (e', t) = infer scn e in
@@ -39,7 +42,7 @@ let exec_stmt (scn : scene) (stmt : Sur.stmt) : scene =
     print_endline ("the expression " ^ pretty_term_under names e);
     print_endline ("successfully checked against type " ^ pretty_term_under names t' ^ "\n");
     scn
-    | Conv (e1, e2, t) ->
+  | Conv (e1, e2, t) ->
     let t' = check scn t Uni in
     let vt = eval scn.env t' in
     let e1' = check scn e1 vt in
@@ -52,12 +55,23 @@ let exec_stmt (scn : scene) (stmt : Sur.stmt) : scene =
     print_endline ("and " ^ pretty_term_under names e2');
     print_endline ("are definitionally equal at " ^ pretty_term_under names t' ^ "\n");
     scn
+  | Import path -> _exec_file scn path
 
 
-let exec : (Sur.prog, string) result -> unit = function
+and exec (scn : scene) : (Sur.prog, string) result -> scene = function
   | Ok stmts ->
-    ignore @@ List.fold_left exec_stmt nullscene stmts
-  | Error e -> print_endline e
+    List.fold_left exec_stmt scn stmts
+  | Error e -> print_endline e; scn
 
-let _exec_str str = exec (parse_str str)
-let _exec_file file = exec (parse_file file)
+and _exec_str scn str = exec scn (parse_str str)
+and _exec_file scn file = exec scn (parse_file file)
+
+
+let repl : unit =
+  let rec aux (scn : scene) : unit =
+    print_string "λΠ> ";
+    let str = read_line () ^ ";" in
+    if str = "#quit;" || str = "#q;" then () else
+      let scn = exec scn (parse_str str) in
+      aux scn
+  in aux nullscene
