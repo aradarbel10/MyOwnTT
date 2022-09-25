@@ -26,3 +26,7 @@ type term =
   | BoolInd of {motive : term; tcase : term; fcase : term; scrut : term}
       (** When [motive] doesn't depend on its parameter,
           this is equivalent to if-then-else *)
+  | Nat
+  | NatZ
+  | NatS of term
+  | NatInd of {motive : term; zcase : term; scase : term; scrut : term}

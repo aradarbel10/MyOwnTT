@@ -1,0 +1,40 @@
+(* numbers can be defined with literals or with `Zero` and `Succ` *)
+def five = Succ (Succ (Succ (Succ (Succ Zero))));
+def five' = 5;
+
+(* these are definitionally equal *)
+#conv five #and five' #at ℕ;
+
+(* we use this to define predicates on ℕ *)
+def neg
+  : Bool → Bool
+  = λ b . if b then False else True
+  ;
+
+(* we define functions on naturals with recursion (technically induction) *)
+def is-even
+  : ℕ → Bool
+  = λ n . rec n at (λ _ . Bool)
+    | Zero . True
+    | Succ m, m-is-even . neg m-is-even
+  ;
+#eval is-even 0;
+#eval is-even 6;
+#eval is-even 15;
+
+(* uni-ary functions are a bit tougher *)
+def add
+  : ℕ → ℕ → ℕ
+  = λ n . rec n at (λ _ . ℕ → ℕ)
+    | Zero . λ m . m
+    | Succ n, add-n . λ m . Succ (add-n m)
+  ;
+#eval add 2 3;
+
+def mul
+  : ℕ → ℕ → ℕ
+  = λ n . rec n at (λ _ . ℕ → ℕ)
+    | Zero . λ m . 0
+    | Succ n, mul-n . λ m . add m (mul-n m)
+  ;
+#eval mul 3 5;

@@ -69,6 +69,20 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
   | _    , True , _
   | _    , False, _    -> raise (UnEq "doesn't match boolean value")
 
+  | Nat, Nat, Uni -> ()
+  | Nat, Nat, _ -> raise (IllTyped "can't convert Nat's under wrong type")
+  | Nat, _  , _
+  | _  , Nat, _ -> raise (UnEq "doesn't match Nat")
+
+  | NatZ, NatZ, Nat -> ()
+  | NatS n1, NatS n2, Nat -> conv siz n1 n2 Nat
+  | NatZ, NatZ, _
+  | NatS _, NatS _, _ -> raise (IllTyped "can't convert Nat terms under wrong type")
+  | NatZ, _, _
+  | _, NatZ, _
+  | NatS _, _, _
+  | _, NatS _, _ -> raise (UnEq "doesn't match natural number value")
+
   | e1, e2, Pi (_, base, fam) ->
     let var = Sem.nextvar siz base in
     let res1 = vApp e1 var in
@@ -130,10 +144,17 @@ and elimconv (siz : Sem.lvl) (em1 : Sem.elim) (em2 : Sem.elim) : unit =
     conv siz arg1 arg2 base1
   | BoolInd {motive = mtv1; tcase = tc1; fcase = fc1},
     BoolInd {motive = mtv2; tcase = tc2; fcase = fc2} ->
-    let famtyp = Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp}) (* Bool → Type *) in
+    let famtyp = bool_to_type in
     conv siz mtv1 mtv2 famtyp;
     conv siz tc1 tc2 (vApp mtv1 True);
     conv siz fc1 fc2 (vApp mtv1 False)
+  | NatInd {motive = mtv1; zcase = zc1; scase = sc1},
+    NatInd {motive = mtv2; zcase = zc2; scase = sc2} ->
+    let famtyp = nat_to_type in
+    conv siz mtv1 mtv2 famtyp;
+    conv siz zc1 zc2 (vApp mtv1 NatZ);
+    let succtyp = nat_ind_step_type mtv1 in
+    conv siz sc1 sc2 (vApp mtv1 succtyp)
   | _ -> raise (UnEq "eliminators don't match")
 
 and teleconv (siz : Sem.lvl) (tel1 : Sem.tele) (tel2 : Sem.tele) : unit =

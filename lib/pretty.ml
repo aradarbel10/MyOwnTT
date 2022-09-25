@@ -13,14 +13,14 @@ let rec pretty_expr (expr : Sur.expr) : string =
   (* TODO properly print singleton tuples and products *)
   | Rcd fs ->
     let entries = List.map (fun (lbl, typ) -> lbl ^ " : " ^ pretty_expr typ) fs in
-    "(" ^ (String.concat "; " entries) ^ ")"
+    "{" ^ (String.concat "; " entries) ^ "}"
   | Prod ts ->
     let entries = List.map pretty_expr ts in
     "(" ^ (String.concat "; " entries) ^ ")"
   | Lam (x, e) -> "λ" ^ x ^ " . " ^ pretty_expr e
   | Dict fs ->
     let entries = List.map (fun (lbl, e) -> lbl ^ " = " ^ pretty_expr e) fs in
-    "(" ^ (String.concat ", " entries) ^ ")"
+    "{" ^ (String.concat "; " entries) ^ "}"
   | Tup es ->
     let entries = List.map pretty_expr es in
     "(" ^ (String.concat ", " entries) ^ ")"
@@ -43,6 +43,16 @@ let rec pretty_expr (expr : Sur.expr) : string =
     ^ " if " ^ pretty_expr e
     ^ " then " ^ pretty_expr t
     ^ " else " ^ pretty_expr f
+  | Nat -> "ℕ"
+  | NatZ -> "Zero"
+  | NatS n -> "Succ " ^ pretty_expr n
+  | NatLit n -> string_of_int n
+  | NatInd (n, t, a, (m, p, b)) ->
+    "rec " ^ pretty_expr n
+    ^ (match t with | Some t -> " at " ^ pretty_expr t | None -> "")
+    ^ " | Zero . " ^ pretty_expr a
+    ^ " | Succ " ^ m ^ ", " ^ p ^ " . " ^ pretty_expr b
+
   
 let rec pretty_term_under (ns : name list) (e : Syn.term) : string =
   match e with
@@ -82,6 +92,13 @@ let rec pretty_term_under (ns : name list) (e : Syn.term) : string =
     "towards " ^ pretty_term_under ns motive ^ " if " ^ pretty_term_under ns scrut
     ^ " then " ^ pretty_term_under ns tcase
     ^ " else " ^ pretty_term_under ns fcase
+  | Nat -> "ℕ"
+  | NatZ -> "Zero"
+  | NatS n -> "Succ " ^ pretty_term_under ns n
+  | NatInd {motive; zcase; scase; scrut} ->
+    "rec " ^ pretty_term_under ns scrut ^ " at " ^ pretty_term_under ns motive
+    ^ " | Zero . " ^ pretty_term_under ns zcase
+    ^ " | Succ . " ^ pretty_term_under ns scase
 
 let pretty_term : Syn.term -> string = pretty_term_under []
 

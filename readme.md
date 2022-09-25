@@ -17,11 +17,8 @@ The focus of this program is to elaborate a `surface` language directly emitted 
         - reform environments in general bc they suck
 (x) Bidirectional type checking
 (⅘) Parsing and pretty printing
-    - change records to `{}`
     - context&precedence-aware pretty printing [2hr]
 ( ) QoL [3hr]
-    - lambda annotations
-    - inferring lets
     - function definition sugar
     - error reporting [2hr]
         - catch in `exec`
@@ -30,37 +27,29 @@ The focus of this program is to elaborate a `surface` language directly emitted 
         - type checking (trace?)
         - conversion ("could not equate A ≡ B when checking X has type Y")
         - internals
-    - nested & line comments
 (x) Boolean literals
 ( ) Natural numbers [1hr]
-    - parse
-    - induction
     - recursion sugar
-(⅔) Named tuples [1hr]
-    - typed binders?
-    - type dependency
-    - dictionary annotations
+(⅘) Named tuples [1hr]
+    - empty tuples (unit)?
 (½) REPL & File input [2hr]
     - #check
     - #conv
     - #unfold
     - elaborate file
-    - nested comments
-    - indentation aware parsing
     - entire repl [1hr]
         - parse
         - typecheck
         - normalize
         - define vars in environment
         - load defs from file
-( ) Refactoring
+( ) Refactoring (MAYBE!)
     - separate module for scenes
+    - `names` entry in scene
     - safe closures and multiclosures
     - uniform typed binders & closures
-    - execution module
-    - does LET still need a scope?
     - use scope specifier in enviornment (also turn environment to a normal list)
-    - rename Rcd, Dict to Sig, Rcd or Sig, Struct...
+    - rename Rcd, Dict to Sig, Rcd
 
 
 ## Surface

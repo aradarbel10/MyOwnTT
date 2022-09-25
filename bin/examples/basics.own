@@ -34,3 +34,6 @@ infers to (
         idTrueFalse : (Bool; Bool)
 )
 *)
+
+(* Unit Types *)
+def unit = sig end;

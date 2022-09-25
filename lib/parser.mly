@@ -66,7 +66,7 @@ let postprocessProd (es : expr list) : expr =
 %}
 
 %token EOF
-%token INF EVAL EXEC
+%token STMT_INF STMT_EVAL STMT_EXEC STMT_CHECK STMT_AGAINST STMT_CONV STMT_AND STMT_AT
 
 %token <string> IDENT
 %token <int> NUM
@@ -74,8 +74,11 @@ let postprocessProd (es : expr list) : expr =
 %token RECORD SIG END
 %token LAMBDA DOT ARROW
 %token TOWARDS IF THEN ELSE
+%token REC AT PIPE
 %token COMMA SEP
-%token TYPE BOOL TRUE FALSE
+%token TYPE
+%token BOOL TRUE FALSE
+%token NAT ZERO SUCC
 %token LET DEF EQ IN
 
 %nonassoc WEAK
@@ -108,22 +111,29 @@ program:
 
 statement:
   | DEF; x=IDENT; t=option(let_annot); EQ; e=expr; SEP { Def (x, t, e) }
-  | INF; e=expr; SEP { Inf e }
-  | EVAL; e=expr; SEP { Eval e }
-  | EXEC; e=expr; SEP { Exec e }
+  | STMT_INF; e=expr; SEP { Inf e }
+  | STMT_EVAL; e=expr; SEP { Eval e }
+  | STMT_EXEC; e=expr; SEP { Exec e }
+  | STMT_CHECK; e=expr; STMT_AGAINST; t=expr; SEP { Check (e, t) }
+  | STMT_CONV; e1=expr; STMT_AND; e2=expr; STMT_AT; t=expr; SEP { Conv (e1, e2, t) }
 
 expr:
   | es=nonempty_list(atom) { unfoldApp es }
   | e=expr; COLON; t=expr { Ann (e, t) }
   | a=expr; ARROW; b=expr { postprocessPi a b }
-
+  | SUCC; n=atom { NatS n }
   | LAMBDA; xs=nonempty_list(IDENT); DOT; e=expr
-  (** [LAMBDA] needs weak precedence to ensure `λx . e : t` == `λx . (e : t)` *)
+  (** [LAMBDA] needs weak precedence to ensure `λx . e : t` == `λx . (e : t)`.
+      similar reason for most other "big" constructs. *)
     %prec WEAK { unfoldLam xs e }
   | TOWARDS; mtv=expr; IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
     %prec WEAK { BoolInd (Some mtv, cond, tc, fc) }
   | IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
     %prec WEAK { BoolInd (None, cond, tc, fc) }
+  | REC; scrut=expr; AT; mtv=expr;
+    PIPE; ZERO; DOT; zcase=expr;
+    PIPE; SUCC; m=IDENT; COMMA; p=IDENT; DOT; scase=expr
+    %prec WEAK { NatInd (scrut, Some mtv, zcase, (m, p, scase)) }
   | LET; x=IDENT; t=option(let_annot); EQ; e=expr; IN; r=expr
     %prec WEAK { Let (x, t, e, r) }
 
@@ -144,6 +154,7 @@ expr:
 
 atom:
   | x=IDENT { Var x }
+  | n=NUM { NatLit n }
   | LPAREN; e=expr; RPAREN { e }
   | LPAREN; t=expr; SEP; ts=separated_list(SEP, expr); RPAREN
     { postprocessProd (t::ts) }
@@ -159,6 +170,8 @@ atom:
   | BOOL  { Bool }
   | TRUE  { True }
   | FALSE { False }
+  | NAT   { Nat }
+  | ZERO  { NatZ }
 
 %inline lblval:
   | l=IDENT; EQ; e=expr; SEP { (l, e) }

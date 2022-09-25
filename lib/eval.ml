@@ -55,28 +55,19 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
   | True -> True
   | False -> False
   | BoolInd {motive = mtv; tcase = tc; fcase = fc; scrut = scrut} ->
-    let tc' = lazy (eval env tc) in
-    let fc' = lazy (eval env fc) in
-    (*  We evaluate each branch lazily in order to avoid redundant computations.
-        Since we're implementing a pure lambda calculus it doesn't matter operationally, but might
-        improve performace when there are big terms inside cases. *)
-    let scrut' = eval env scrut in
-    match scrut' with
-    | True -> Lazy.force tc'
-    | False -> Lazy.force fc'
-    | Neut (hd, sp, Bool) ->
-      let mtv' = eval env mtv in
-      let typ = vApp mtv' scrut' in
-      let elim = Sem.BoolInd {motive = mtv'; tcase = Lazy.force tc'; fcase = Lazy.force fc'} in
-      Neut (hd, elim :: sp, typ)
-    | _ -> raise (IllTyped "can't eliminate non-bool")
+    vBoolInd (eval env mtv) (eval env tc) (eval env fc) (eval env scrut)
+  | Nat -> Nat
+  | NatZ -> NatZ
+  | NatS n -> NatS (eval env n)
+  | NatInd {motive = mtv; zcase = zc; scase = sc; scrut} ->
+    vNatInd (eval env mtv) (eval env zc) (eval env sc) (eval env scrut)
     
 (** Instantiate a closure(/type family) at given type *)
 and inst (C {bdr = B body; env = env} : Sem.closure) (base : Sem.value) : Sem.value =
   eval (Local (env, "_x", base)) body
     
     
-(** β-reduction helpers *)
+(** β-reduction helpers on values *)
 and vApp (fnc : Sem.value) (arg : Sem.value) : Sem.value =
   match Sem.force_head fnc with
   | Neut (hd, sp, typ) ->
@@ -141,6 +132,32 @@ and vProjAt (i : int) (vl : Sem.value) : Sem.value =
     | _ -> raise (IllTyped "can't project index from non-product neutral")
     end    
   | _ -> raise (IllTyped "can't project index from non-tuple")
+and vBoolInd (mtv : Sem.value) (tc : Sem.value) (fc : Sem.value) (scrut : Sem.value) : Sem.value =
+  match scrut with
+  | True -> tc
+  | False -> fc
+  | Neut (hd, sp, typ) ->
+    begin match Sem.force_head typ with
+    | Bool ->
+      let em = Sem.BoolInd {motive = mtv; tcase = tc; fcase = fc} in
+      let typ = vApp mtv scrut in
+      Neut (hd, em :: sp, typ)
+    | _ -> raise (IllTyped "can't eliminate value not of type Bool")
+    end
+  | _ -> raise (IllTyped "can't eliminate a non-boolean")
+and vNatInd (mtv : Sem.value) (zc : Sem.value) (sc : Sem.value) (scrut : Sem.value) : Sem.value =
+  match scrut with
+  | NatZ -> zc
+  | NatS n -> vApp (vApp sc n) (vNatInd mtv zc sc n)
+  | Neut (hd, sp, typ) ->
+    begin match Sem.force_head typ with
+    | Nat ->
+      let em = Sem.NatInd {motive = mtv; zcase = zc; scase = sc} in
+      let typ = vApp mtv scrut in
+      Neut (hd, em :: sp, typ)
+    | _ -> raise (IllTyped "can't eliminate value not of type Nat")
+    end
+  | _ -> raise (IllTyped "can't eliminate a non-natural")
 
 and field_type (vl : Sem.value) (x : name) (T {bdrs; env} : Sem.tele) : Sem.value =
   (* TODO improve to linear time! ? *)
@@ -192,6 +209,9 @@ let rec quote (siz : Sem.lvl) (vl : Sem.value) : Syn.term =
   | Bool -> Bool
   | True -> True
   | False -> False
+  | Nat -> Nat
+  | NatZ -> NatZ
+  | NatS n -> NatS (quote siz n)
   | Neut (hd, sp, _) -> quote_neut siz hd sp
 
 and quote_tele (siz : Sem.lvl) (tel : Sem.tele) : (name * Syn.term) list =
@@ -214,10 +234,9 @@ and quote_elim (siz : Sem.lvl) (em : Sem.elim) (scrut : Syn.term) : Syn.term =
     let arg = quote siz arg in
     App (scrut, arg)
   | BoolInd {motive; tcase; fcase} ->
-    let motive = quote siz motive in
-    let tcase = quote siz tcase in
-    let fcase = quote siz fcase in
-    BoolInd {motive = motive; tcase = tcase; fcase = fcase; scrut = scrut}
+    BoolInd {motive = quote siz motive; tcase = quote siz tcase; fcase = quote siz fcase; scrut = scrut}
+  | NatInd {motive; zcase; scase} ->
+    NatInd {motive = quote siz motive; zcase = quote siz zcase; scase = quote siz scase; scrut = scrut}
 
 and quote_head (siz : Sem.lvl) (hd : Sem.head) : Syn.term =
   match hd with
@@ -225,3 +244,13 @@ and quote_head (siz : Sem.lvl) (hd : Sem.head) : Syn.term =
     let (Idx i) as idx = lvl2idx siz i in
     if i < 0 then failwith "quoting negative index"
     else Var idx
+
+(* useful constants *)
+let bool_to_type = (* Bool → Type *)
+  Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp})
+let nat_to_type = (* Nat → Type *)
+  Sem.Pi ("", Nat, C {bdr = B Uni; env = Emp})
+let nat_ind_step_type (mtv : Sem.value) = (* (n : Nat) → mtv n → mtv (Succ n) *)
+  Sem.Pi ("n", Nat, C {bdr = B (Syn.Pi ("",
+  quote (Lvl 1) (vApp mtv (Sem.var (Lvl 0) Nat)),
+  B (quote (Lvl 2) (vApp mtv (NatS (Sem.var (Lvl 0) Nat)))))); env = Emp})

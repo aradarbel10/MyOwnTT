@@ -18,7 +18,7 @@ let print_err_pos lexbuf =
 
 let alpha = ['a'-'z' 'A'-'Z']
 let digit = ['0'-'9']
-let ident = (alpha) (alpha|'-'|digit)*
+let ident = (alpha) (alpha|'-'|digit|'\'')*
 let unum = digit+
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
@@ -27,17 +27,29 @@ rule read = parse
   | whitespace  { read lexbuf }
   | newline     { next_line lexbuf; read lexbuf }
   | "(*"        { read_comment lexbuf }
-  | "#infer"    { INF }
-  | "#eval"     { EVAL }
-  | "#exec"     { EXEC }
+  | "#infer"    { STMT_INF }
+  | "#eval"     { STMT_EVAL }
+  | "#exec"     { STMT_EXEC }
+  | "#check"    { STMT_CHECK }
+  | "#against"  { STMT_AGAINST }
+  | "#conv"     { STMT_CONV }
+  | "#and"      { STMT_AND }
+  | "#at"       { STMT_AT }
   | "Type"      { TYPE }
   | "Bool"      { BOOL }
+  | "𝔹"         { BOOL }
   | "True"      { TRUE }
   | "False"     { FALSE }
+  | "Nat"       { NAT }
+  | "ℕ"         { NAT }
+  | "Zero"      { ZERO }
+  | "Succ"      { SUCC }
   | "towards"   { TOWARDS }
   | "if"        { IF }
   | "then"      { THEN }
   | "else"      { ELSE }
+  | "rec"       { REC }
+  | "at"        { AT }
   | "record"    { RECORD }
   | "sig"       { SIG }
   | "end"       { END }
@@ -55,6 +67,7 @@ rule read = parse
   | '{'         { LCURLY }
   | '}'         { RCURLY }
   | ':'         { COLON }
+  | '|'         { PIPE }
   | ';'         { SEP }
   | ','         { COMMA }
   | '_'         { IDENT "" }

@@ -19,6 +19,9 @@ type value =
   | Bool
   | True
   | False
+  | Nat
+  | NatZ
+  | NatS of value
   | Neut of head * spine * value
 
 and head =
@@ -34,6 +37,7 @@ and elim =
     (** [base] is the type of [arg] (base of the pi's type-family),
         used later in the type-directed conversion. *)
   | BoolInd of {motive : value; tcase : value; fcase : value}
+  | NatInd of {motive : value; zcase : value; scase : value}
 and spine = elim list
 (** We use a spine based representation of neutral terms where the head is the variable
     it got stuck on, and it can be easily accessed in constant time. Example in pseudo-notation:

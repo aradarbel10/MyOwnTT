@@ -128,7 +128,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
   | BoolInd (Some mtv, scrut, tc, fc) ->
     let scrut = check scn scrut Bool in
     let vscrut = eval scn.env scrut in
-    let mtv = check scn mtv (Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp})) in
+    let mtv = check scn mtv bool_to_type in
     let vmtv = eval scn.env mtv in
     let typ = vApp vmtv vscrut in
     let tc = check scn tc (vApp vmtv True) in
@@ -142,6 +142,28 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     let mtv = Syn.Lam ("_mtv", Bool, B (quote (Sem.inc scn.hi) typ)) in
     let ind = Syn.BoolInd {motive = mtv; tcase = tc; fcase = fc; scrut = scrut} in
     (ind, typ)
+  | Nat -> (Nat, Uni)
+  | NatZ -> (NatZ, Nat)
+  | NatS n ->
+    let n = check scn n Nat in
+    (NatS n, Nat)
+  | NatLit n ->
+    let rec lit_to_nat (n : int) : Syn.term =
+      if n < 0 then raise (TypeError "negative numbers not supported")
+      else if n == 0 then NatZ
+      else NatS (lit_to_nat (n - 1))
+    in (lit_to_nat n, Nat)
+  | NatInd (scrut, Some mtv, zc, (m, p, sc)) ->
+    let scrut = check scn scrut Nat in
+    let vscrut = eval scn.env scrut in
+    let mtv = check scn mtv (Sem.Pi ("", Nat, C {bdr = B Uni; env = Emp})) in
+    let vmtv = eval scn.env mtv in
+    let typ = vApp vmtv vscrut in
+    let zc = check scn zc (vApp vmtv NatZ) in
+    let sc = check scn (Lam (m, Lam (p, sc))) (nat_ind_step_type vmtv) in
+    let ind = Syn.NatInd {motive = mtv; zcase = zc; scase = sc; scrut = scrut} in
+    (ind, typ)
+  | NatInd (_, None, _, _) -> raise (TypeError "unannotated nat induction unsupported")
   | _ -> print_endline ("\n\n" ^ pretty_expr expr); raise UnInferrable
 
 and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
@@ -173,22 +195,6 @@ and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
     let lbls = tele_names fs in
     let es' = List.map2 (fun lbl e -> (lbl, e)) lbls es in
     check scn (Dict es') (Rcd fs)
-    (*
-  let rec check_entries (es : Sur.expr list) (T {bdrs; _} as fs : Sem.tele) (acc : (name * Syn.term) list) =
-    begin match es, bdrs with
-    | [], [] -> List.rev acc
-    | [], _ | _, [] -> raise (TypeError "dictionary has less entries than its record type")
-    | e :: es, _ :: _ ->
-      match inst_tele_at e fs with
-      | None -> failwith "unreachable"
-      | Some (x, t, fs') ->
-        print_endline ("donig the thing: " ^ pretty_expr e ^ " at " ^ x ^ " against " ^ pretty_term_under names t);
-        let e = check scn e t in
-        let ve = eval scn.env e in
-        check_entries es fs' ((x, e) :: acc)
-      end
-    in Dict (check_entries es fs [])
-    *)
   | Let (x, typ, e, rest), resttyp ->
     let (bdr, scn) = checkLet scn Loc x typ e in
     let rest = check scn rest resttyp in
