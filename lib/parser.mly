@@ -60,7 +60,7 @@ let postprocessProd (es : expr list) : expr =
       end
     | _ -> None
   in match aux es with
-  | Some fs -> Rcd fs
+  | Some fs -> Sig fs
   | None -> Prod es
 
 %}
@@ -140,15 +140,15 @@ expr:
 %inline let_annot:
   | COLON; t=expr { t }
 
-%inline ldict:
-  | LCURLY { () }
-  | RECORD { () }
-%inline rdict:
-  | rrcd { () }
 %inline lrcd:
   | LCURLY { () }
-  | SIG { () }
+  | RECORD { () }
 %inline rrcd:
+  | rsig { () }
+%inline lsig:
+  | LCURLY { () }
+  | SIG { () }
+%inline rsig:
   | RCURLY { () }
   | END { () }
 
@@ -160,10 +160,12 @@ atom:
     { postprocessProd (t::ts) }
   | LPAREN; e=expr; COMMA; es=separated_list(COMMA, expr); RPAREN
     { Tup (e::es) }
-  | ldict; t=lblval; ts=list(lblval); rdict
-    { Dict (t::ts) }
-  | lrcd; t=lbltyp; ts=list(lbltyp); rrcd
+  | lrcd; t=lblval; ts=list(lblval); rrcd
     { Rcd (t::ts) }
+  | lsig; t=lbltyp; ts=list(lbltyp); rsig
+    { Sig (t::ts) }
+  | SIG; END { Sig [] }
+  | RECORD; END { Rcd [] }
   | e=atom; DOT; i=NUM { ProjAt (e, i) }
   | e=atom; DOT; i=IDENT { Proj (e, i) }
   | TYPE  { Uni }

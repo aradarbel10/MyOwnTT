@@ -23,8 +23,8 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
   | Pi  _, _    , _
   | _    , Pi  _, _ -> raise (UnEq "type former mismatch")
 
-  | Prod ts, Rcd fs, Uni
-  | Rcd fs, Prod ts, Uni ->
+  | Prod ts, Sig fs, Uni
+  | Sig fs, Prod ts, Uni ->
     let rec conv_fields (siz : Sem.lvl) (fs : Sem.tele) (ts : Sem.value list) =
       begin match Eval.inst_tele siz fs, ts with
       | Some (_, typ, tel), t :: rest ->
@@ -35,13 +35,13 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
       end
     in conv_fields siz fs ts
   (* failwith "TODO: should this be convertible?" *)
-  | Prod _, Rcd _, _
-  | Rcd _, Prod _, _ -> raise (UnEq "can't convert record and product under wrong type")
+  | Prod _, Sig _, _
+  | Sig _, Prod _, _ -> raise (UnEq "can't convert record and product under wrong type")
 
-  | Rcd fs1, Rcd fs2, Uni -> teleconv siz fs1 fs2
-  | Rcd _, Rcd _, _ -> raise (UnEq "can't convert record types under wrong type")
-  | Rcd _, _, _
-  | _, Rcd _, _ -> raise (UnEq "can't convert record with non-record")
+  | Sig fs1, Sig fs2, Uni -> teleconv siz fs1 fs2
+  | Sig _, Sig _, _ -> raise (UnEq "can't convert record types under wrong type")
+  | Sig _, _, _
+  | _, Sig _, _ -> raise (UnEq "can't convert record with non-record")
 
   | Prod ts1, Prod ts2, Uni ->
     ignore @@ List.map2 (fun v1 v2 -> conv siz v1 v2 Uni) ts1 ts2
@@ -92,7 +92,7 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
   | Lam _, _, _
   | _, Lam _, _ -> raise (IllTyped "converting lambda under wrong type")
 
-  | e1, e2, Rcd fs ->
+  | e1, e2, Sig fs ->
     let rec conv_fields (siz : Sem.lvl) (fs : Sem.tele) : unit =
       match inst_tele siz fs with
       | None -> ()
@@ -100,8 +100,8 @@ let rec conv (siz : Sem.lvl) (e1 : Sem.value) (e2 : Sem.value) (typ : Sem.value)
         conv siz (vProj lbl e1) (vProj lbl e2) typ;
         conv_fields (Sem.inc siz) rest
     in conv_fields siz fs
-  | Dict _, _, _
-  | _, Dict _, _ -> raise (IllTyped "converting dictionary under wrong type")
+  | Rcd _, _, _
+  | _, Rcd _, _ -> raise (IllTyped "converting records under wrong type")
 
   | e1, e2, Prod ts ->
     List.iteri (fun i t -> conv siz (vProjAt i e1) (vProjAt i e2) t) ts;

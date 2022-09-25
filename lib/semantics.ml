@@ -11,8 +11,8 @@ type lvl = Lvl of int
 type value =
   | Pi of name * value * closure
   | Lam of name * value * closure
-  | Rcd of tele
-  | Dict of (name * value) list
+  | Sig of tele
+  | Rcd of (name * value) list
   | Prod of value list
   | Tup of value list
   | Uni
@@ -48,30 +48,31 @@ and closure =
   | C of {bdr : Syn.term binder; env : env}
 and tele =
   | T of {bdrs : (name * Syn.term) list; env : env}
-and env =
-  | Emp
-  | Local of env * name * value
-  | Toplevel of env * name * value (*TODO need Lazy.t here?*)
+and env = (name * value Lazy.t) list
+(*
+| Emp
+| Local of env * name * value
+| Toplevel of env * name * value (*TODO need Lazy.t here?*)
+*)
 
 exception OutOfBounds of string
 let rec atIdx (env : env) (Idx i : Syn.idx) : value =
   match env with
-  | Emp -> raise (OutOfBounds ("idx" ^ string_of_int i))
-  | Local (env', _, v) | Toplevel (env', _, v) ->
+  | [] -> raise (OutOfBounds ("idx" ^ string_of_int i))
+  | (_, v) :: env' ->
     if i == 0
-      then v
+      then Lazy.force v
       else atIdx env' (Idx (i - 1))
 let height (env : env) : lvl = (* TODO still need this? ideally just use scn.hi always *)
   let rec aux (env : env) : int =
     match env with
-    | Emp -> 0
-    | Local (env', _, _) | Toplevel (env', _, _) -> 1 + aux env'
+    | [] -> 0
+    | _ :: env' -> 1 + aux env'
   in Lvl (aux env)
 let rec names (env : env) : name list = (* TODO still need this? ideally store names separately in scene *)
   match env with
-  | Emp -> []
-  | Local (env', x, _)
-  | Toplevel (env', x, _) -> x :: names env'
+  | [] -> []
+  | (x, _) :: env' -> x :: names env'
 
 (** We use this helper function to propagate projections (lazily!) through
     [Glue] into the unfolded version of the value. *)

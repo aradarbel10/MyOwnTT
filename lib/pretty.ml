@@ -11,14 +11,14 @@ let rec pretty_expr (expr : Sur.expr) : string =
   | Pi ("", a, b) -> "(" ^ pretty_expr a ^ " → " ^ pretty_expr b ^ ")"
   | Pi (x, a, b) -> "((" ^ x ^ " : " ^ pretty_expr a ^ ") → " ^ pretty_expr b ^ ")"
   (* TODO properly print singleton tuples and products *)
-  | Rcd fs ->
+  | Sig fs ->
     let entries = List.map (fun (lbl, typ) -> lbl ^ " : " ^ pretty_expr typ) fs in
     "{" ^ (String.concat "; " entries) ^ "}"
   | Prod ts ->
     let entries = List.map pretty_expr ts in
     "(" ^ (String.concat "; " entries) ^ ")"
   | Lam (x, e) -> "λ" ^ x ^ " . " ^ pretty_expr e
-  | Dict fs ->
+  | Rcd fs ->
     let entries = List.map (fun (lbl, e) -> lbl ^ " = " ^ pretty_expr e) fs in
     "{" ^ (String.concat "; " entries) ^ "}"
   | Tup es ->
@@ -63,10 +63,10 @@ let rec pretty_term_under (ns : name list) (e : Syn.term) : string =
   | Pi ("", a, B b) -> "(" ^ pretty_term_under ns a ^ " → " ^ pretty_term_under (""::ns) b ^ ")"
   | Pi (x, a, B b) -> "((" ^ x ^ " : " ^ pretty_term_under ns a ^ ") → " ^ pretty_term_under (x::ns) b ^ ")"
   (* TODO properly print singleton tuples and products *)
-  | Rcd fs ->
+  | Sig fs ->
     let entries = snd @@ List.fold_left_map (fun ns (x, t) -> (x::ns, x ^ " : " ^ pretty_term_under ns t)) ns fs in
     "(" ^ (String.concat "; " entries) ^ ")"
-  | Dict fs ->
+  | Rcd fs ->
     let entries = snd @@ List.fold_left_map (fun ns (x, e) -> (x::ns, x ^ " = " ^ pretty_term_under ns e)) ns fs in
     "(" ^ (String.concat ", " entries) ^ ")"
   | Prod ts ->

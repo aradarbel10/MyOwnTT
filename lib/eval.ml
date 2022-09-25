@@ -23,15 +23,15 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
   | Var i -> Sem.atIdx env i
   | Pi (x, typ, bound) -> Pi (x, eval env typ, C {bdr = bound; env = env})
   | Lam (x, typ, bound) -> Lam (x, eval env typ, C {bdr = bound; env = env})
-  | Rcd fs -> Rcd (T {bdrs = fs; env = env})
-  | Dict fs ->
+  | Sig fs -> Sig (T {bdrs = fs; env = env})
+  | Rcd fs ->
     let rec process_fields (env : Sem.env) = function
       | [] -> []
       | (lbl, entry) :: rest ->
         let ventry = eval env entry in
-        let env' = Sem.Local (env, lbl, ventry) in
+        let env' = (lbl, lazy ventry) :: env in
         (lbl, ventry) :: process_fields env' rest
-    in Dict (process_fields env fs)
+    in Rcd (process_fields env fs)
   | Prod ts -> Prod (List.map (eval env) ts)
   | Tup es -> Tup (List.map (eval env) es)
   | App (e1, e2) -> vApp (eval env e1) (eval env e2)
@@ -43,11 +43,11 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
       let typ' = eval env typ in
       let body' = lazy (eval env body) in
       let glue = Sem.Glue (Sem.height env, body') in
-      let env' = Sem.Toplevel (env, x, Neut (glue, [], typ')) in
+      let env' = (x, lazy (Sem.Neut (glue, [], typ'))) :: env in
       eval env' rest
     | Loc ->
-      let body' = eval env body in
-      let env' = Sem.Local (env, x, body') in
+      let body' = lazy (eval env body) in
+      let env' = (x, body') :: env in
       eval env' rest
     end
   | Uni -> Uni
@@ -64,7 +64,7 @@ let rec eval (env : Sem.env) (tm : Syn.term) : Sem.value =
     
 (** Instantiate a closure(/type family) at given type *)
 and inst (C {bdr = B body; env = env} : Sem.closure) (base : Sem.value) : Sem.value =
-  eval (Local (env, "_x", base)) body
+  eval (("_x", lazy base) :: env) body
     
     
 (** β-reduction helpers on values *)
@@ -82,34 +82,34 @@ and vApp (fnc : Sem.value) (arg : Sem.value) : Sem.value =
   | _ -> raise (IllTyped "can't apply on non-lambda")
 and vProj (x : name) (vl : Sem.value) : Sem.value =
   match Sem.force_head vl with
-  | Dict fs ->
+  | Rcd fs ->
     begin match List.assoc_opt x fs with
     | None ->
       let lbls = List.map fst fs in
       let set = "{" ^ String.concat ", " lbls ^ "}" in
-      raise (IllTyped ("can't project out of dictionary " ^ set ^ " without given label " ^ x))
+      raise (IllTyped ("can't project out of record " ^ set ^ " without given label " ^ x))
     | Some e -> e
     end
   | Neut (hd, sp, typ) ->
     begin match Sem.force_head typ with
-    | Rcd fs ->
+    | Sig fs ->
       let hd' = Sem.head_map (vProj x) hd in
       let sp' = Sem.Proj x :: sp in
       let typ = field_type vl x fs in
       Neut (hd', sp', typ)
     | _ -> raise (IllTyped "can't project field from a non-record neutral")
     end
-  | _ -> raise (IllTyped "can't project field from non-dictionary")
+  | _ -> raise (IllTyped "can't project field from non-record")
 and vProjAt (i : int) (vl : Sem.value) : Sem.value =
   match Sem.force_head vl with
   | Tup es ->
     begin try List.nth es i with
     | Failure _ -> raise (IllTyped "index outside of tuple")
     end
-  | Dict fs ->
+  | Rcd fs ->
     let entries = List.map snd fs in
     begin try List.nth entries i with
-    | Failure _ -> raise (IllTyped "index outside of dictionary")
+    | Failure _ -> raise (IllTyped "index outside of record")
     end
   | Neut (hd, sp, typ) ->
     begin match Sem.force_head typ with
@@ -120,7 +120,7 @@ and vProjAt (i : int) (vl : Sem.value) : Sem.value =
       let hd' = Sem.head_map (vProjAt i) hd in
       let sp' = Sem.ProjAt i :: sp in
       Neut (hd', sp', typ)
-    | Rcd (T {bdrs; _} as fs) ->
+    | Sig (T {bdrs; _} as fs) ->
       let typ = begin match List.nth_opt bdrs i with
       | None -> raise (IllTyped "")
       | Some (lbl, _) -> field_type vl lbl fs
@@ -167,8 +167,8 @@ and field_type (vl : Sem.value) (x : name) (T {bdrs; env} : Sem.tele) : Sem.valu
     if x = lbl
       then eval env t
       else
-        let entry = vProj lbl vl in
-        let env' = Sem.Local (env, x, entry) in
+        let entry = lazy (vProj lbl vl) in
+        let env' = (x, entry) :: env in
         field_type vl x (T {bdrs = rest; env = env'})
 
 let inst_tele_at (vl : Sem.value) (tel : Sem.tele) : (name * Sem.value * Sem.tele) option =
@@ -177,7 +177,7 @@ let inst_tele_at (vl : Sem.value) (tel : Sem.tele) : (name * Sem.value * Sem.tel
   | [] -> None
   | (x, t) :: rest ->
     let vt = eval env t in
-    let env' = Sem.Local (env, x, vl) in
+    let env' = (x, lazy vl) :: env in
     Some (x, vt, T {bdrs = rest; env = env'})
 
 let inst_tele (siz : Sem.lvl) (tel : Sem.tele) : (name * Sem.value * Sem.tele) option =
@@ -186,7 +186,7 @@ let inst_tele (siz : Sem.lvl) (tel : Sem.tele) : (name * Sem.value * Sem.tele) o
   | [] -> None
   | (x, t) :: rest ->
     let vt = eval env t in
-    let env' = Sem.Local (env, x, Sem.var siz vt) in
+    let env' = (x, lazy (Sem.var siz vt)) :: env in
     Some (x, vt, T {bdrs = rest; env = env'})
 
 let tele_names (T {bdrs; _} : Sem.tele) : name list = List.map fst bdrs
@@ -201,8 +201,8 @@ let rec quote (siz : Sem.lvl) (vl : Sem.value) : Syn.term =
   | Lam (x, t, e) ->
     let fam = inst e (Sem.var siz t) in
     Lam (x, quote siz t, B (quote (Sem.inc siz) fam))
-  | Rcd fs -> Rcd (quote_tele siz fs)
-  | Dict fs -> Dict (quote_dict siz fs)
+  | Sig fs -> Sig (quote_tele siz fs)
+  | Rcd fs -> Rcd (quote_rcd siz fs)
   | Prod ts -> Prod (List.map (quote siz) ts)
   | Tup es -> Tup (List.map (quote siz) es)
   | Uni -> Uni
@@ -218,10 +218,10 @@ and quote_tele (siz : Sem.lvl) (tel : Sem.tele) : (name * Syn.term) list =
   match inst_tele siz tel with
   | None -> []
   | Some (x, t, rest) -> (x, quote siz t) :: quote_tele (Sem.inc siz) rest
-and quote_dict (siz : Sem.lvl) (fs : (name * Sem.value) list) : (name * Syn.term) list =
+and quote_rcd (siz : Sem.lvl) (fs : (name * Sem.value) list) : (name * Syn.term) list =
   match fs with
   | [] -> []
-  | (x, e) :: rest -> (x, quote siz e) :: quote_dict (Sem.inc siz) rest
+  | (x, e) :: rest -> (x, quote siz e) :: quote_rcd (Sem.inc siz) rest
 
 and quote_neut (siz : Sem.lvl) (hd : Sem.head) (sp : Sem.spine) : Syn.term =
   List.fold_right (quote_elim siz) sp (quote_head siz hd)
@@ -247,10 +247,10 @@ and quote_head (siz : Sem.lvl) (hd : Sem.head) : Syn.term =
 
 (* useful constants *)
 let bool_to_type = (* Bool → Type *)
-  Sem.Pi ("", Bool, C {bdr = B Uni; env = Emp})
+  Sem.Pi ("", Bool, C {bdr = B Uni; env = []})
 let nat_to_type = (* Nat → Type *)
-  Sem.Pi ("", Nat, C {bdr = B Uni; env = Emp})
+  Sem.Pi ("", Nat, C {bdr = B Uni; env = []})
 let nat_ind_step_type (mtv : Sem.value) = (* (n : Nat) → mtv n → mtv (Succ n) *)
   Sem.Pi ("n", Nat, C {bdr = B (Syn.Pi ("",
   quote (Lvl 1) (vApp mtv (Sem.var (Lvl 0) Nat)),
-  B (quote (Lvl 2) (vApp mtv (NatS (Sem.var (Lvl 0) Nat)))))); env = Emp})
+  B (quote (Lvl 2) (vApp mtv (NatS (Sem.var (Lvl 0) Nat)))))); env = []})

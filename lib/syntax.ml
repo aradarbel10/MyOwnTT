@@ -7,8 +7,8 @@ type term =
   | Var of idx
   | Pi of name * term * term binder
   | Lam of name * term * term binder
+  | Sig of (name * term) list
   | Rcd of (name * term) list
-  | Dict of (name * term) list
   | Prod of term list
   | Tup of term list
   | App of term * term

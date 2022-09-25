@@ -13,8 +13,6 @@ The focus of this program is to elaborate a `surface` language directly emitted 
         - in conversion
             - conversion of two glues
             - conversion of glued and non-glued
-    - lazy environment
-        - reform environments in general bc they suck
 (x) Bidirectional type checking
 (⅘) Parsing and pretty printing
     - context&precedence-aware pretty printing [2hr]
@@ -30,13 +28,8 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 (x) Boolean literals
 ( ) Natural numbers [1hr]
     - recursion sugar
-(⅘) Named tuples [1hr]
-    - empty tuples (unit)?
+(x) Named tuples [1hr]
 (½) REPL & File input [2hr]
-    - #check
-    - #conv
-    - #unfold
-    - elaborate file
     - entire repl [1hr]
         - parse
         - typecheck
@@ -49,8 +42,6 @@ The focus of this program is to elaborate a `surface` language directly emitted 
     - safe closures and multiclosures
     - uniform typed binders & closures
     - use scope specifier in enviornment (also turn environment to a normal list)
-    - rename Rcd, Dict to Sig, Rcd
-
 
 ## Surface
 Surface expressions are the direct output from the parser. These use user-friendly explicit naming and distinguish top-level definitions from local let bindings.

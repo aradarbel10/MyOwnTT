@@ -19,12 +19,12 @@ def const
     : (A B : Type) → A → B → A
     = λ A B x y . x;
 
-#exec
-    (   idConst = id ((C D : Type) → C → D → C) const
-    ,   idTyp = (id Type Bool, id Type Type)
-    ,   pair = (True, False)
-    ,   idTrueFalse = id (Bool; Bool) (True, False)
-    );
+#exec record
+    idConst = id ((C D : Type) → C → D → C) const;
+    idTyp = (id Type Bool, id Type Type);
+    pair = (True, False);
+    idTrueFalse = id (Bool; Bool) (True, False);
+end;
 
 (*
 infers to (
@@ -35,5 +35,10 @@ infers to (
 )
 *)
 
-(* Unit Types *)
 def unit = sig end;
+#infer unit;
+def star = record end;
+#check star #against unit;
+#conv (λ u . u)
+#and (λ _ . star)
+#at unit → unit;

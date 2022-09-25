@@ -23,18 +23,18 @@ let lookupVar (x : name) (ctx : ctx) =
     
 (** Bidirectional Type Checking *)
 type scene = {ctx : ctx; env : Sem.env; hi : Sem.lvl}
-let nullscene = {ctx = []; env = Emp; hi = Lvl 0}
+let nullscene = {ctx = []; env = []; hi = Lvl 0}
     
 let assume (x : name) (typ : Sem.value) (scn : scene) : scene =
-  { ctx = (x, typ) :: scn.ctx; env = Local (scn.env, x, Sem.var scn.hi typ); hi = Sem.inc scn.hi }
+  { ctx = (x, typ) :: scn.ctx; env = (x, lazy (Sem.var scn.hi typ)) :: scn.env; hi = Sem.inc scn.hi }
     
 let define (scp : scope) (x : name) (typ : Sem.value) (vl : Sem.value) (scn : scene) : scene =
   let extend = match scp with
-  | Loc -> Sem.Local (scn.env, x, vl)
+  | Loc -> (x, lazy vl) :: scn.env
   | Top ->
     let unfd = lazy vl in
-    let neut = Sem.Neut (Glue (scn.hi, unfd), [], typ) in
-    Sem.Toplevel (scn.env, x, neut)
+    let neut = lazy (Sem.Neut (Glue (scn.hi, unfd), [], typ)) in
+    (x, neut) :: scn.env
   in { ctx = (x, typ) :: scn.ctx; env = extend; hi = Sem.inc scn.hi }
 
 exception UnInferrable
@@ -54,7 +54,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     let va = eval scn.env a in
     let b  = check (assume x va scn) b Sem.Uni in
     (Pi (x, a, B b), Uni)
-  | Rcd fs ->
+  | Sig fs ->
     let rec infer_fields (scn : scene) (fs : (name * Sur.expr) list) : (name * Syn.term) list =
       match fs with
       | [] -> []
@@ -63,8 +63,8 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
         let vt = eval scn.env t in
         let scn' = assume x vt scn in
         (x, t) :: infer_fields scn' rest
-    in (Rcd (infer_fields scn fs), Uni)
-  | Dict fs ->
+    in (Sig (infer_fields scn fs), Uni)
+  | Rcd fs ->
     let rec infer_entries (scn : scene) (fs : (name * Sur.expr) list)
                           : (name * Syn.term) list * (name * Syn.term) list =
       match fs with
@@ -77,7 +77,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
         let (rest, resttyp) = infer_entries scn' rest in
         ((x, e) :: rest, (x, t) :: resttyp)
     in let (fs, ts) = infer_entries scn fs in
-    (Dict fs, Rcd (T {bdrs = ts; env = scn.env}))
+    (Rcd fs, Sig (T {bdrs = ts; env = scn.env}))
   | Prod ts ->
     let ts = List.map (fun t -> check scn t Uni) ts in
     (Prod ts, Uni)
@@ -97,7 +97,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
   | Proj (e, x) ->
     let (e, t) = infer scn e in
     begin match Sem.force_head t with
-    | Rcd fs ->
+    | Sig fs ->
       let ve = eval scn.env e in
       let xt = field_type ve x fs in
       (Proj (e, x), xt)
@@ -107,7 +107,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     let (e', t) = infer scn e in
     begin try
       begin match Sem.force_head t with
-      | Rcd (T {bdrs; _}) ->
+      | Sig (T {bdrs; _}) ->
         let x = List.nth (List.map fst bdrs) i in
         infer scn (Proj (e, x))
       | Prod ts ->
@@ -156,7 +156,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
   | NatInd (scrut, Some mtv, zc, (m, p, sc)) ->
     let scrut = check scn scrut Nat in
     let vscrut = eval scn.env scrut in
-    let mtv = check scn mtv (Sem.Pi ("", Nat, C {bdr = B Uni; env = Emp})) in
+    let mtv = check scn mtv nat_to_type in
     let vmtv = eval scn.env mtv in
     let typ = vApp vmtv vscrut in
     let zc = check scn zc (vApp vmtv NatZ) in
@@ -170,31 +170,31 @@ and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
   let names = List.map fst scn.ctx in
   match expr, Sem.force_head typ with
   | Lam (x, e), Pi (_, a, C {bdr = B bdr; env}) ->
-    let fam = eval (Local (env, x, Sem.var scn.hi a)) bdr in
+    let fam = eval ((x, lazy (Sem.var scn.hi a)) :: env) bdr in
     let e = check (assume x a scn) e fam in
     Lam (x, quote scn.hi a, B e)
   | Tup es, Prod ts ->
     let es = List.map2 (check scn) es ts in
     Tup es
-  | Dict es, Rcd fs ->
+  | Rcd es, Sig fs ->
     let rec check_entries (scn : scene) (es : (name * Sur.expr) list) (T {bdrs; env} : Sem.tele) (acc : (name * Syn.term) list) =
       begin match es, bdrs with
       | [], [] -> List.rev acc
-      | [], _ | _, [] -> raise (TypeError "dictionary has less entries than its record type")
+      | [], _ | _, [] -> raise (TypeError "record has less entries than its record type")
       | (x, e) :: es, (x', t) :: es' ->
-        if x <> x' then raise (TypeError "nonmatching dictionary labels") else
+        if x <> x' then raise (TypeError "nonmatching record labels") else
           let vt = eval env t in  
           let e = check scn e vt in
           let ve = eval scn.env e in
-          let env' = Sem.Local (env, x, ve) in
+          let env' = (x, lazy ve) :: env in
           let scn' = define Loc x vt ve scn in
           check_entries scn' es (Sem.T {bdrs = es'; env = env'}) ((x, e) :: acc)
       end
-    in Dict (check_entries scn es fs [])
-  | Tup es, Rcd fs ->
+    in Rcd (check_entries scn es fs [])
+  | Tup es, Sig fs ->
     let lbls = tele_names fs in
     let es' = List.map2 (fun lbl e -> (lbl, e)) lbls es in
-    check scn (Dict es') (Rcd fs)
+    check scn (Rcd es') (Sig fs)
   | Let (x, typ, e, rest), resttyp ->
     let (bdr, scn) = checkLet scn Loc x typ e in
     let rest = check scn rest resttyp in
