@@ -4,20 +4,12 @@ def id : (A : Type) → A → A
 #exec (id Type Bool, id Bool False);
 #exec False;
 
-def id
-    : (A : Type) → A → A
-    = λ A x . x;
-def typid
-    : Type → Type
-    = λ t . t;
+def id (A : Type) (x : A) : A = x;
+def typid (t : Type) : Type = t;
 #exec id (Type → Type) typid;
 
-def id
-    : (A : Type) → A → A
-    = λ A x . x;
-def const
-    : (A B : Type) → A → B → A
-    = λ A B x y . x;
+def id (A : Type) (x : A) = x;
+def const (A B : Type) (x : A) (y : B) : A = x;
 
 #exec record
     idConst = id ((C D : Type) → C → D → C) const;

@@ -49,6 +49,13 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     let e   = check scn e typ in
     (e, typ)
   | Var x -> let (i, typ) = lookupVar x scn.ctx in (Var i, typ)
+  | Lam (x, Some t, e) ->
+    let t = check scn t Uni in
+    let vt = eval scn.env t in
+    let scn' = assume x vt scn in
+    let (e, typ) = infer scn' e in
+    let arrow = Syn.Pi ("", t, B (quote scn'.hi typ)) in
+    (Lam (x, t, B e), eval scn.env arrow)
   | Pi (x, a, b) ->
     let a  = check scn a Sem.Uni in
     let va = eval scn.env a in
@@ -160,7 +167,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
     let vmtv = eval scn.env mtv in
     let typ = vApp vmtv vscrut in
     let zc = check scn zc (vApp vmtv NatZ) in
-    let sc = check scn (Lam (m, Lam (p, sc))) (nat_ind_step_type vmtv) in
+    let sc = check scn (Lam (m, None, Lam (p, None, sc))) (nat_ind_step_type vmtv) in
     let ind = Syn.NatInd {motive = mtv; zcase = zc; scase = sc; scrut = scrut} in
     (ind, typ)
   | NatInd (_, None, _, _) -> raise (TypeError "unannotated nat induction unsupported")
@@ -169,7 +176,7 @@ let rec infer (scn : scene) (expr : Sur.expr) : Syn.term * Sem.value =
 and check (scn : scene) (expr : Sur.expr) (typ : Sem.value) : Syn.term =
   let names = List.map fst scn.ctx in
   match expr, Sem.force_head typ with
-  | Lam (x, e), Pi (_, a, C {bdr = B bdr; env}) ->
+  | Lam (x, None, e), Pi (_, a, C {bdr = B bdr; env}) ->
     let fam = eval ((x, lazy (Sem.var scn.hi a)) :: env) bdr in
     let e = check (assume x a scn) e fam in
     Lam (x, quote scn.hi a, B e)
@@ -229,3 +236,20 @@ and checkLet (scn : scene) (scp : scope) (x : name) (typ : Sur.expr option) (e :
   end in
   let ve = eval scn.env e in
   ((fun rest -> Let (scp, x, quote scn.hi vtyp, e, B rest)), define scp x vtyp ve scn)
+
+(*
+and commonType (scn : scene) (e1 : Sur.expr) (e2 : Sur.expr) (typ : Sem.value option) : Syn.term * Syn.term * Sem.value =
+match typ with
+| None ->
+  begin try
+    let (e1, typ) = infer scn e1 in
+    let e2 = check scn e2 typ in
+    (e1, e2, typ)
+    with
+    | UnInferrable ->
+      let (e2, typ) = infer scn e2 in
+      let e1 = check scn e1 typ in
+      (e1, e2, typ)
+    end
+    | Some typ -> (check scn e1 typ, check scn e2 typ, typ)
+*)

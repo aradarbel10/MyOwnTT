@@ -20,11 +20,11 @@ let rec unfoldApp (es : expr list) : expr =
   | e1 :: e2 :: rest -> unfoldApp ((App (e1, e2)) :: rest)
 
 (** unfolds lambda abstractions with multiple parameters *)
-let rec unfoldLam (xs : string list) (e : expr) : expr =
+let rec unfoldLam (xs : (string * expr option) list) (e : expr) : expr =
   match xs with
-  | [] -> raise EmptyUnfolding
-  | [x] -> Lam (x, e)
-  | x :: rest -> Lam (x, unfoldLam rest e)
+  | [] -> e
+  | [(x, t)] -> Lam (x, t, e)
+  | (x, t) :: rest -> Lam (x, t, unfoldLam rest e)
 
 (** converts an application of the form `(((w x) y ) z)` of variables
     to a list of variable names. returns [None] if any of the expressions are not a variable. *)
@@ -99,6 +99,9 @@ let postprocessProd (es : expr list) : expr =
 %type <expr> expr
 %type <expr> atom
 
+%type <(string * expr option) list> param
+%type <(string * expr option) list> big_param
+
 %type <expr> let_annot
 %type <string * expr> lblval
 %type <string * expr> lbltyp
@@ -111,7 +114,13 @@ program:
   | stmts=list(statement); EOF { stmts }
 
 statement:
-  | DEF; x=IDENT; t=option(let_annot); EQ; e=expr; SEP { Def (x, t, e) }
+  | DEF; x=IDENT; ps=list(big_param); t=option(let_annot); EQ; e=expr; SEP
+    { Def (x, None,
+      unfoldLam (List.concat ps) (match t with
+      | None -> e
+      | Some t -> Ann (e, t)
+      ))
+    }
   | STMT_INF; e=expr; SEP { Inf e }
   | STMT_EVAL; e=expr; SEP { Eval e }
   | STMT_PARSE; e=expr; SEP { Parse e }
@@ -125,10 +134,10 @@ expr:
   | e=expr; COLON; t=expr { Ann (e, t) }
   | a=expr; ARROW; b=expr { postprocessPi a b }
   | SUCC; n=atom { NatS n }
-  | LAMBDA; xs=nonempty_list(IDENT); DOT; e=expr
+  | LAMBDA; xs=nonempty_list(param); DOT; e=expr
   (** [LAMBDA] needs weak precedence to ensure `λx . e : t` == `λx . (e : t)`.
       similar reason for most other "big" constructs. *)
-    %prec WEAK { unfoldLam xs e }
+    %prec WEAK { unfoldLam (List.concat xs) e }
   | TOWARDS; mtv=expr; IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
     %prec WEAK { BoolInd (Some mtv, cond, tc, fc) }
   | IF; cond=expr; THEN; tc=expr; ELSE; fc=expr
@@ -142,6 +151,13 @@ expr:
 
 %inline let_annot:
   | COLON; t=expr { t }
+
+param:
+  | p=big_param { p }
+  | x=IDENT { [(x, None)] }
+
+big_param:
+  | LPAREN; xs=nonempty_list(IDENT); COLON; t=expr; RPAREN { List.map (fun x -> (x, Some t)) xs }
 
 %inline lrcd:
   | LCURLY { () }

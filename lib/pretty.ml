@@ -17,7 +17,7 @@ let rec pretty_expr (expr : Sur.expr) : string =
   | Prod ts ->
     let entries = List.map pretty_expr ts in
     "(" ^ (String.concat "; " entries) ^ ")"
-  | Lam (x, e) -> "λ" ^ x ^ " . " ^ pretty_expr e
+  | Lam (x, t, e) -> "λ" ^ x ^ (match t with | None -> "" | Some t -> " : " ^ pretty_expr t) ^ " . " ^ pretty_expr e
   | Rcd fs ->
     let entries = List.map (fun (lbl, e) -> lbl ^ " = " ^ pretty_expr e) fs in
     "{" ^ (String.concat "; " entries) ^ "}"

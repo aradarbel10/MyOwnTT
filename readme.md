@@ -17,7 +17,6 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 (⅘) Parsing and pretty printing
     - context&precedence-aware pretty printing [2hr]
 ( ) QoL [3hr]
-    - function definition sugar
     - error reporting [2hr]
         - catch in `exec`
         - error location
@@ -29,8 +28,9 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 ( ) Natural numbers [1hr]
     - recursion sugar
         - `shared_type : scene -> term -> term -> type option -> type`
-(x) Named tuples [1hr]
+(x) Named tuples
 (x) REPL & File input
+    - #help
 
 ## Surface
 Surface expressions are the direct output from the parser. These use user-friendly explicit naming and distinguish top-level definitions from local let bindings.
