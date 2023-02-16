@@ -10,7 +10,7 @@ The focus of this program is to elaborate a `surface` language directly emitted 
 - [x] Full spectrum dependent type theory featuring Π and Σ type formers
 - [x] Normalization by Evaluation w/ DeBruijn levels & indices
 - [x] Type directed conversion checking
-- [?] Glued evaluation
+- [x] Glued evaluation
 - [x] Bidirectional type checking
 - [x] Parsing and pretty printing
 - [x] Boolean literals
