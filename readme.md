@@ -1,36 +1,22 @@
 # MyOwnTT
+**WARNING: incomplete project ahead**
+
 This implementation was inspired by and expands on Jon Sterling's video lecture:
 [How to code your own type theory](https://youtu.be/DEj-_k2Nx6o)
 
 The focus of this program is to elaborate a `surface` language directly emitted by the parser down to a type-correct representation called `syntax`. On the way we also use a `semantic` domain - which is invariantly β-reduced - in the style of normalization-by-evaluation.
 
 ### Some major features/aspects of the implementation:
-(x) Full spectrum dependent type theory featuring Π and Σ type formers
-(x) Normalization by Evaluation w/ DeBruijn levels & indices
-(x) Type directed conversion checking
-(?) Glued evaluation [2.5hr]
-    - test if actually works
-        - in conversion
-            - conversion of two glues
-            - conversion of glued and non-glued
-(x) Bidirectional type checking
-(⅘) Parsing and pretty printing
-    - context&precedence-aware pretty printing [2hr]
-( ) QoL [3hr]
-    - error reporting [2hr]
-        - catch in `exec`
-        - error location
-        - parser errors
-        - type checking (trace?)
-        - conversion ("could not equate A ≡ B when checking X has type Y")
-        - internals
-(x) Boolean literals
-( ) Natural numbers [1hr]
-    - recursion sugar
-        - `shared_type : scene -> term -> term -> type option -> type`
-(x) Named tuples
-(x) REPL & File input
-    - #help
+- [x] Full spectrum dependent type theory featuring Π and Σ type formers
+- [x] Normalization by Evaluation w/ DeBruijn levels & indices
+- [x] Type directed conversion checking
+- [?] Glued evaluation
+- [x] Bidirectional type checking
+- [x] Parsing and pretty printing
+- [x] Boolean literals
+- [x] Natural numbers
+- [x] Named tuples
+- [x] REPL & File input
 
 ## Surface
 Surface expressions are the direct output from the parser. These use user-friendly explicit naming and distinguish top-level definitions from local let bindings.
@@ -43,6 +29,7 @@ Semantic values use DeBruijn *levels* (counting the environment from the left) w
 
 ### Neutral Values
 Values have a distinct subdomain for *neutrals*, which are those values that can't be β-reduced further due to being "stuck" on a variable. These neutrals are represented in spine form for easy access to the head - the variable it's stuck on.
+
 ### Glued Eval
 During conversion checking we don't necessarily want to unfold all definitions, because that might lead to a significant blow-up in value size. Likewise, when printing values to the user we want them to be as small as possible, for better readability. On the other hand, we still want to be able to unfold all definitions on demand when the need arises. For this we keep a "glued" lazily-evaluated version of the value in which certain definitions can be unfolded.
 
